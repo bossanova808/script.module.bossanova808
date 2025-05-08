@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import os
+
 import sys
 import xbmc
 import xbmcvfs
@@ -21,9 +21,9 @@ PROFILE = xbmcvfs.translatePath(ADDON.getAddonInfo('profile'))
 LOG_PATH = xbmcvfs.translatePath('special://logpath')
 KODI_VERSION = xbmc.getInfoLabel('System.BuildVersion')
 try:
-    KODI_VERSION_INT = int(KODI_VERSION.split(".")[0])
+    KODI_MAJOR_VERSION = int(xbmc.getInfoLabel('System.BuildVersionCode').split('.')[0])
 except (ValueError, IndexError):
-    KODI_VERSION_INT = 0
+    KODI_MAJOR_VERSION = 21
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
 HOME_WINDOW = xbmcgui.Window(10000)
 WEATHER_WINDOW = xbmcgui.Window(12600)
