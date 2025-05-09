@@ -1,5 +1,5 @@
 
-Bossanova808 Common Code for Kodi Addons
+Common Code for Bossanova808 Kodi Addons
 ===================================
 
 _script.module.bossanova808_
@@ -9,24 +9,19 @@ _script.module.bossanova808_
 
 Common code for all bossanova808 Kodi addons, including:
 
-**Available from the Kodi Official Repository:**
+**...available from the Official Kodi Repository:**
 
 * OzWeather 
 * Unpause Jumpback
 * Playback Resumer
 * Check Previous Episode
 * Caber Toss
+* Switchback
 
 
-**Available from the [Bossanova808 Repository](https://github.com/bossanova808/repository.bossanova808):**
+**...available from the [Bossanova808 Repository](https://github.com/bossanova808/repository.bossanova808):**
 
 * OzWeather Skin Patcher
 * YoctoDisplay
-
-
-
-
-
-
 
 
