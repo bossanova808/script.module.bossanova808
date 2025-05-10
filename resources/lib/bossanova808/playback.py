@@ -119,7 +119,7 @@ class PlaybackList:
         :return:
         """
         self.list = []
-        xbmcvfs.makedirs(os.path.dirname(self.file), exist_ok=True)
+        xbmcvfs.mkdirs(os.path.dirname(self.file))
         with open(self.file, 'w'):
             pass
 
