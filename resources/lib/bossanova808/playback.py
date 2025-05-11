@@ -3,9 +3,11 @@ import json
 from json import JSONDecodeError
 from dataclasses import dataclass
 from typing import List
-import xbmcvfs
+from xbmcgui import ListItem
+
 from bossanova808.constants import *
 from bossanova808.logger import Logger
+from infotagger.listitem import ListItemInfoTag
 
 
 @dataclass
@@ -78,6 +80,45 @@ class Playback:
         """
         return json.dumps(self, default=lambda o:o.__dict__)
 
+    # noinspection PyMethodMayBeStatic
+    def create_list_item(self, offscreen=False) -> ListItem:
+        """
+        Create a Kodi ListItem object from a Playback object
+
+        :param offscreen: whether to create the list item in offscreen mode (faster) - default False
+        :return: a Kodi ListItem object
+        """
+        Logger.debug(f"Creating list item from playback {self.pluginlabel} (path [{self.path}])")
+        Logger.debug(self)
+
+        url = self.path
+        list_item = xbmcgui.ListItem(label=self.pluginlabel, path=url, offscreen=offscreen)
+        tag = ListItemInfoTag(list_item, "video")
+        # Infotagger seems the best way to do this currently as is well tested
+        # I found directly setting things on InfoVideoTag to be buggy/inconsistent
+        infolabels = {
+                'mediatype':self.type,
+                'dbid':self.dbid if self.type != 'episode' else self.tvshowdbid,
+                # InfoTagger throws a Key Error on this?
+                # 'tvshowdbid': self.tvshowdbid or None,
+                'title':self.title,
+                'path':self.path,
+                'year':self.year,
+                'tvshowtitle':self.showtitle,
+                'episode':self.episode,
+                'season':self.season,
+                'duration':self.totaltime,
+        }
+        tag.set_info(infolabels)
+        if "pvr" not in self.source:
+            tag.set_resume_point({'ResumeTime':self.resumetime, 'TotalTime':self.totaltime})
+        list_item.setArt({"thumb":self.thumbnail})
+        list_item.setArt({"poster":self.poster})
+        list_item.setArt({"fanart":self.fanart})
+        list_item.setProperty('IsPlayable', 'true')
+
+        return list_item
+
 
 @dataclass
 class PlaybackList:
@@ -103,15 +144,6 @@ class PlaybackList:
         temp_json = ',\n'.join(temp_json)
         return f"[\n{temp_json}\n]\n"
 
-    def save_to_file(self) -> None:
-        """
-        Save the PlaybackList to the PlaybackList file (as JSON)
-
-        :return:
-        """
-        with open(self.file, 'w', encoding='utf-8') as f:
-            f.write(self.toJson())
-
     def init(self) -> None:
         """
         Initialise/reset an in memory PlaybackList, and delete/re-create the empty PlaybackList file
@@ -123,7 +155,7 @@ class PlaybackList:
         with open(self.file, 'w'):
             pass
 
-    def load_from_file(self) -> None:
+    def load_or_init(self) -> None:
         """
         Load a JSON-formatted PlaybackList from the PlaybackList file
 
@@ -144,8 +176,17 @@ class PlaybackList:
         except:
             raise
 
-        Logger.info(f"PlaybackList is:")
-        Logger.info(self.list)
+        Logger.debug(f"PlaybackList is:")
+        Logger.debug(self.list)
+
+    def save_to_file(self) -> None:
+        """
+        Save the PlaybackList to the PlaybackList file (as JSON)
+
+        :return:
+        """
+        with open(self.file, 'w', encoding='utf-8') as f:
+            f.write(self.toJson())
 
     def delete_file(self) -> None:
         """
