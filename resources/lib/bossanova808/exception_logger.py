@@ -1,7 +1,5 @@
-# coding: utf-8
-
 # (c) Roman Miroshnychenko <roman1972@gmail.com> 2020
-# Retrieved from:
+# Originally retrieved from:
 # https://github.com/thetvdb/metadata.tvshows.thetvdb.com.v4.python/blob/master/metadata.tvshows.thetvdb.com.v4.python/resources/lib/exception_logger.py
 # (Thanks Roman! - Modified by bossanova808 as needed...)
 #
@@ -21,14 +19,14 @@
 """Exception logger with extended diagnostic info"""
 
 import inspect
-import sys
 from contextlib import contextmanager
 from platform import uname
 from pprint import pformat
 from typing import Text, Callable, Generator
+# noinspection PyUnresolvedReferences
 import xbmc
-from .constants import *
-from .logger import Logger
+from bossanova808.constants import *
+from bossanova808.logger import Logger
 
 
 def _format_vars(variables):
@@ -118,20 +116,20 @@ def log_exception(logger_func=Logger.error):
     - Python version
     - Kodi version
     - Module path.
-    - Stack trace including:
+    - Stack trace including
         * File path and line number where the exception happened
         * Code fragment where the exception has happened.
         * Local variables at the moment of the exception.
 
     After logging the diagnostic info the exception is re-raised.
 
-    Example::
+    Example:
 
         with debug_exception():
             # Some risky code
             raise RuntimeError('Fatal error!')
 
-    :param logger_func: logger function that accepts a single argument
+    :param logger_func: Logger function that accepts a single argument
         that is a log message.
     """
     try:
