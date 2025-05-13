@@ -1,5 +1,4 @@
 import os
-import json
 from json import JSONDecodeError
 from dataclasses import dataclass
 from typing import List
@@ -7,7 +6,7 @@ from typing import List
 from xbmcgui import ListItem
 from infotagger.listitem import ListItemInfoTag
 
-from bossanova808.constants import *
+from bossanova808.utilities import *
 from bossanova808.logger import Logger
 
 
@@ -16,8 +15,6 @@ class Playback:
     """
     Stores whatever data we can grab about a Kodi Playback so that we can display it nicely in the Switchback list
     """
-
-    file: str = None
     path: str = None
     type: str = None  # episode, movie, video (per Kodi types) - song is the other type, but Switchback supports video only
     # Seems to be a newer version of the above, but unclear how/when to use, and what about music??
@@ -87,6 +84,85 @@ class Playback:
         """
         return json.dumps(self, default=lambda o:o.__dict__)
 
+    def update_playback_details_from_listitem(self, item: ListItem) -> None:
+        """
+        Update the Playback object with details from a playing Kodi ListItem object and InfoLabels
+
+        :param item: the current Kodi playing item
+        """
+
+        self.path = item.getPath()
+        self.label = item.getLabel()
+        self.label = item.getLabel2()
+
+        # SOURCE - Kodi Library (...get DBID), PVR, or Non-Library Media?
+        self.dbid = int(xbmc.getInfoLabel(f'VideoPlayer.DBID')) if xbmc.getInfoLabel(f'VideoPlayer.DBID') else None
+        if self.dbid:
+            self.source = "kodi_library"
+        elif 'channels' in self.path:
+            self.source = "pvr_live"
+        elif 'recordings' in self.path:
+            self.source = "pvr_recording"
+        elif 'http' in self.path:
+            self.source = "addon"
+        else:
+            Logger.info("Not from Kodi library, not PVR, not an http source - must be a non-library media file")
+            self.source = "file"
+
+        # TITLE
+        if self.source != "pvr_live":
+            self.title = xbmc.getInfoLabel(f'VideoPlayer.Title')
+        else:
+            self.title = xbmc.getInfoLabel('VideoPlayer.ChannelName')
+
+        # MEDIA TYPE - not 100% on the logic here...
+        if xbmc.getInfoLabel('VideoPlayer.TVShowTitle'):
+            self.type = "episode"
+            self.tvshowdbid = int(xbmc.getInfoLabel('VideoPlayer.TvShowDBID')) if xbmc.getInfoLabel('VideoPlayer.TvShowDBID') else None
+        elif self.dbid:
+            self.type = "movie"
+        elif xbmc.getInfoLabel('VideoPlayer.ChannelName'):
+            self.type = "pvr"
+        else:
+            self.type = "file"
+
+        # Initialise RESUME TIME and TOTAL TIME / DURATION
+        if self.source != "pvr_live":
+            self.totaltime = self.duration = float(item.getProperty('TotalTime')) or None
+            # This will get updated as playback progresses (see switchback_service.py), but might as well initialise here
+            self.resumetime = float(item.getProperty('ResumeTime')) or None
+
+        # ARTWORK - POSTER, FANART and THUMBNAIL
+        self.poster = clean_art_url(xbmc.getInfoLabel('Player.Art(tvshow.poster)') or xbmc.getInfoLabel('Player.Art(poster)') or xbmc.getInfoLabel('Player.Art(thumb)'))
+        self.fanart = clean_art_url(xbmc.getInfoLabel('Player.Art(fanart)'))
+        self.thumbnail = clean_art_url(xbmc.getInfoLabel('Player.Art(thumb)') or item.getArt('thumb'))
+
+        # OTHER DETAILS
+        # PVR Live/Recordings
+        self.channelname = xbmc.getInfoLabel('VideoPlayer.ChannelName')
+        self.channelnumberlabel = xbmc.getInfoLabel('VideoPlayer.ChannelNumberLabel')
+        self.channelgroup = xbmc.getInfoLabel('VideoPlayer.ChannelGroup')
+        # Episodes & Movies
+        self.year = int(xbmc.getInfoLabel(f'VideoPlayer.Year')) if xbmc.getInfoLabel(f'VideoPlayer.Year') else None
+        # Episodes
+        self.showtitle = xbmc.getInfoLabel('VideoPlayer.TVShowTitle')
+        self.season = int(xbmc.getInfoLabel('VideoPlayer.Season')) if xbmc.getInfoLabel('VideoPlayer.Season') else None
+        self.episode = int(xbmc.getInfoLabel('VideoPlayer.Episode')) if xbmc.getInfoLabel('VideoPlayer.Episode') else None
+        # Episodes -> we also want the number of seasons so we can force-browse to the appropriate spot after a Swtichback initiated playback
+        if self.tvshowdbid:
+            json_dict = {
+                    "jsonrpc":"2.0",
+                    "id":"VideoLibrary.GetSeasons",
+                    "method":"VideoLibrary.GetSeasons",
+                    "params":{
+                            "tvshowid":self.tvshowdbid,
+                    },
+            }
+            properties_json = send_kodi_json(f'Get seasons details for tv show {self.showtitle}', json_dict)
+            properties = properties_json['result']
+            # {'limits': {'end': 2, 'start': 0, 'total': 2}, 'seasons': [{'label': 'Season 1', 'seasonid': 131094}, {'label': 'Season 2', 'seasonid': 131095}]}
+            self.totalseasons = properties['limits']['total']
+
     # noinspection PyMethodMayBeStatic
     def create_list_item(self, offscreen: bool = False) -> ListItem:
         """
@@ -126,7 +202,7 @@ class Playback:
             tag.set_info(infolabels)
             tag.set_resume_point({'ResumeTime':self.resumetime, 'TotalTime':self.totaltime})
             if self.tvshowdbid:
-                list_item.setProperty('tvshowdbid', str(self.tvshowdbid)) 
+                list_item.setProperty('tvshowdbid', str(self.tvshowdbid))
 
         return list_item
 
