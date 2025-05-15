@@ -1,4 +1,5 @@
 import os
+from urllib.parse import urlencode
 from json import JSONDecodeError
 from dataclasses import dataclass
 from typing import List
@@ -15,6 +16,7 @@ class Playback:
     """
     Stores whatever data we can grab about a Kodi Playback so that we can display it nicely in the Switchback list
     """
+    file: str = None
     path: str = None
     type: str = None  # episode, movie, video (per Kodi types) - song is the other type, but Switchback supports video only
     # Seems to be a newer version of the above, but unclear how/when to use, and what about music??
@@ -164,7 +166,7 @@ class Playback:
             self.totalseasons = properties['limits']['total']
 
     # noinspection PyMethodMayBeStatic
-    def create_list_item(self, offscreen: bool = False) -> ListItem:
+    def create_list_item_from_playback(self, offscreen: bool = False) -> ListItem:
         """
         Create a Kodi ListItem object from a Playback object
 
@@ -174,35 +176,47 @@ class Playback:
 
         Logger.debug(f"Creating list item from playback:", self)
 
-        url = self.path
-        list_item = xbmcgui.ListItem(label=self.pluginlabel, path=url, offscreen=offscreen)
+        path = self.path
+        list_item = xbmcgui.ListItem(label=self.pluginlabel, path=path, offscreen=offscreen)
         list_item.setArt({"thumb":self.thumbnail})
         list_item.setArt({"poster":self.poster})
         list_item.setArt({"fanart":self.fanart})
         list_item.setProperty('IsPlayable', 'true')
 
-        # PVR channels are not videos! See: https://forum.kodi.tv/showthread.php?tid=381623&pid=3232826#pid3232826
-        if "pvr_live" not in self.source:
-            tag = ListItemInfoTag(list_item, "video")
-            # Infotagger seems the best way to do this currently as is well tested
-            # I found directly setting things on InfoVideoTag to be buggy/inconsistent
-            infolabels = {
-                    'mediatype':self.type,
-                    'dbid':self.dbid if self.type != 'episode' else self.tvshowdbid,
-                    # InfoTagger throws a Key Error on this?
-                    # 'tvshowdbid': self.tvshowdbid or None,
-                    'title':self.title,
-                    'path':self.path,
-                    'year':self.year,
-                    'tvshowtitle':self.showtitle,
-                    'episode':self.episode,
-                    'season':self.season,
-                    'duration':self.totaltime,
-            }
-            tag.set_info(infolabels)
-            tag.set_resume_point({'ResumeTime':self.resumetime, 'TotalTime':self.totaltime})
-            if self.tvshowdbid:
-                list_item.setProperty('tvshowdbid', str(self.tvshowdbid))
+        if "pvr" in self.source:
+            # use a proxy plugin url to actually trigger resuming live PVR playback...
+            # (TODO: remove this hack when setResolvedUrl/ListItems are fixed to properly handle PVR links in listitem.path)
+            args = urlencode({'mode': 'pvr_hack', 'path': self.path})
+            list_item.setPath(f"plugin://plugin.switchback/?{args}")
+            Logger.debug("Playback was PVR - override ListItem path to point to plugin proxy URL for PVR playback hack", list_item.getPath())
+
+            # PVR channels are not really videos! See: https://forum.kodi.tv/showthread.php?tid=381623&pid=3232826#pid3232826
+            # So that's all we need to do for PVR playbacks
+            if "pvr_live" in self.source:
+                return list_item
+
+        # Otherwise, it's an episode/movie/file etc...set the InfoVideoTag stuff
+        tag = ListItemInfoTag(list_item, "video")
+        # Infotagger seems the best way to do this currently as is well tested
+        # I found directly setting things on InfoVideoTag to be buggy/inconsistent
+        infolabels = {
+                'mediatype':self.type,
+                'dbid':self.dbid if self.type != 'episode' else self.tvshowdbid,
+                # InfoTagger throws a Key Error on this?
+                # 'tvshowdbid': self.tvshowdbid or None,
+                'title':self.title,
+                'path':self.path,
+                'year':self.year,
+                'tvshowtitle':self.showtitle,
+                'episode':self.episode,
+                'season':self.season,
+                'duration':self.totaltime,
+        }
+        tag.set_info(infolabels)
+        # Required, otherwise immediate Switchback mode won't resume properly
+        tag.set_resume_point({'ResumeTime':self.resumetime, 'TotalTime':self.totaltime})
+        if self.tvshowdbid:
+            list_item.setProperty('tvshowdbid', str(self.tvshowdbid))
 
         return list_item
 
@@ -290,6 +304,7 @@ class PlaybackList:
         :param path: str The path to search for
         :return: Playback or None: The Playback object if found, otherwise None
         """
+        Logger.debug(f"find_playback_by_path: {path}")
         for playback in self.list:
             if playback.path == path:
                 return playback
