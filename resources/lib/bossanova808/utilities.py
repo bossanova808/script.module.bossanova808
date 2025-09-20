@@ -1,5 +1,6 @@
 import json
 import re
+import xbmcgui
 import xml.etree.ElementTree as ElementTree
 from urllib.parse import unquote
 
@@ -39,7 +40,7 @@ def clear_property(window: xbmcgui.Window, name: str) -> None:
     window.clearProperty(name)
 
 
-def get_property(window: xbmcgui.Window, name: str) -> str or None:
+def get_property(window: xbmcgui.Window, name: str) -> str | None:
     """
     Return the value of a window property
 
@@ -50,7 +51,7 @@ def get_property(window: xbmcgui.Window, name: str) -> str or None:
     return window.getProperty(name)
 
 
-def get_property_as_bool(window: xbmcgui.Window, name: str) -> bool or None:
+def get_property_as_bool(window: xbmcgui.Window, name: str) -> bool | None:
     """
     Return the value of a window property as a boolean
 
@@ -61,7 +62,7 @@ def get_property_as_bool(window: xbmcgui.Window, name: str) -> bool or None:
     return window.getProperty(name).lower() == "true"
 
 
-def send_kodi_json(human_description: str, json_dict_or_string: str or dict) -> dict or None:
+def send_kodi_json(human_description: str, json_dict_or_string: str | dict) -> dict | None:
     """
     Send a JSON command to Kodi, logging the human description, command, and result as returned.
 
@@ -82,7 +83,7 @@ def send_kodi_json(human_description: str, json_dict_or_string: str or dict) -> 
     return result
 
 
-def get_setting(setting: str) -> str or None:
+def get_setting(setting: str) -> str | None:
     """
     Helper function to get an addon setting
 
@@ -92,7 +93,7 @@ def get_setting(setting: str) -> str or None:
     return ADDON.getSetting(setting).strip()
 
 
-def get_setting_as_bool(setting: str) -> bool or None:
+def get_setting_as_bool(setting: str) -> bool | None:
     """
     Helper function to get bool type from settings
 
@@ -106,7 +107,7 @@ def get_setting_as_bool(setting: str) -> bool or None:
     return None
 
 
-def get_kodi_setting(setting: str) -> str or None:
+def get_kodi_setting(setting: str) -> str | None:
     """
     Get a Kodi setting value - for settings, see https://github.com/xbmc/xbmc/blob/18f70e7ac89fd502b94b8cd8db493cc076791f39/system/settings/settings.xml
 
@@ -118,14 +119,14 @@ def get_kodi_setting(setting: str) -> str or None:
     return properties_json['result']['value']
 
 
-def get_advancedsetting(setting_path: str) -> str or None:
+def get_advancedsetting(setting_path: str) -> str | None:
     """
     Helper function to extract a setting from Kodi's advancedsettings.xml file,
     Remember: cast the result appropriately and provide the Kodi default value as a fallback if the setting is not found.
     E.g.::
         Store.ignore_seconds_at_start = int(get_advancedsetting('./video/ignoresecondsatstart')) or 180
 
-    :param setting_path: The advanced setting, in path (section/setting) form, to look for (e.g. video/ignoresecondsatstart)
+    :param setting_path: The advanced setting, in 'section/setting' (i.e. path) form, to look for (e.g. video/ignoresecondsatstart)
     :return: The setting value if found, None if not found/advancedsettings.xml doesn't exist
     """
     advancedsettings_file = xbmcvfs.translatePath("special://profile/advancedsettings.xml")
@@ -166,9 +167,9 @@ def clean_art_url(kodi_url: str) -> str:
 def is_playback_paused() -> bool:
     """
     Helper function to return Kodi player state.
-    (Odd this is needed, it should be a testable state on Player really...)
+    (Odd that this is needed, it should be a testable state on Player really...)
 
-    :return: Boolean indicating player paused state
+    :return: Boolean indicating the player paused state
     """
     return bool(xbmc.getCondVisibility("Player.Paused"))
 

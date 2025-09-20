@@ -21,7 +21,7 @@ KODI_VERSION = xbmc.getInfoLabel('System.BuildVersion')
 try:
     KODI_MAJOR_VERSION = int(xbmc.getInfoLabel('System.BuildVersionCode').split('.')[0])
 except (ValueError, IndexError):
-    KODI_MAJOR_VERSION = 21  # fall back to the current major version by default
+    KODI_MAJOR_VERSION = 21  # fall back to the current major release by default
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
 HOME_WINDOW = xbmcgui.Window(10000)
 WEATHER_WINDOW = xbmcgui.Window(12600)

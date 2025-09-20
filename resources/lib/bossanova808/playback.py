@@ -1,5 +1,4 @@
 import os
-from urllib.parse import urlencode
 from json import JSONDecodeError
 from dataclasses import dataclass
 from typing import List
@@ -130,9 +129,9 @@ class Playback:
 
         # Initialise RESUME TIME and TOTAL TIME / DURATION
         if self.source != "pvr_live":
-            self.totaltime = self.duration = float(item.getProperty('TotalTime')) or None
+            self.totaltime = self.duration = float(item.getVideoInfoTag().getResumeTimeTotal()) or None
             # This will get updated as playback progresses (see switchback_service.py), but might as well initialise here
-            self.resumetime = float(item.getProperty('ResumeTime')) or None
+            self.resumetime = float(item.getVideoInfoTag().getResumeTime()) or None
 
         # ARTWORK - POSTER, FANART and THUMBNAIL
         self.poster = clean_art_url(xbmc.getInfoLabel('Player.Art(tvshow.poster)') or xbmc.getInfoLabel('Player.Art(poster)') or xbmc.getInfoLabel('Player.Art(thumb)'))
@@ -183,17 +182,18 @@ class Playback:
         list_item.setArt({"fanart":self.fanart})
         list_item.setProperty('IsPlayable', 'true')
 
-        if "pvr" in self.source:
-            # use a proxy plugin url to actually trigger resuming live PVR playback...
-            # (TODO: remove this hack when setResolvedUrl/ListItems are fixed to properly handle PVR links in listitem.path)
-            args = urlencode({'mode': 'pvr_hack', 'path': self.path})
-            list_item.setPath(f"plugin://plugin.switchback/?{args}")
-            Logger.debug("Playback was PVR - override ListItem path to point to plugin proxy URL for PVR playback hack", list_item.getPath())
+        # if "pvr" in self.source:
+        #     # use a proxy plugin url to actually trigger resuming live PVR playback...
+        #     # (TODO: remove this hack when setResolvedUrl/ListItems are fixed to properly handle PVR links in listitem.path)
+        #     args = urlencode({'mode': 'pvr_hack', 'path': self.path})
+        #     list_item.setPath(f"plugin://plugin.switchback/?{args}")
+        #     Logger.debug("Playback was PVR - override ListItem path to point to plugin proxy URL for PVR playback hack", list_item.getPath())
+        #
+        #     # PVR channels are not really videos! See: https://forum.kodi.tv/showthread.php?tid=381623&pid=3232826#pid3232826
+        #     # So that's all we need to do for PVR playbacks
 
-            # PVR channels are not really videos! See: https://forum.kodi.tv/showthread.php?tid=381623&pid=3232826#pid3232826
-            # So that's all we need to do for PVR playbacks
-            if "pvr_live" in self.source:
-                return list_item
+        if "pvr_live" in self.source:
+            return list_item
 
         # Otherwise, it's an episode/movie/file etc...set the InfoVideoTag stuff
         tag = ListItemInfoTag(list_item, "video")
@@ -247,7 +247,7 @@ class PlaybackList:
 
     def init(self) -> None:
         """
-        Initialise/reset an in memory PlaybackList, and delete/re-create the empty PlaybackList file
+        Initialise/reset in memory PlaybackList, and delete/re-create the empty PlaybackList file
         """
         self.list = []
         xbmcvfs.mkdirs(os.path.dirname(self.file))
@@ -297,7 +297,7 @@ class PlaybackList:
         """
         self.list = list(filter(lambda x:x.path == path, self.list))
 
-    def find_playback_by_path(self, path: str) -> Playback or None:
+    def find_playback_by_path(self, path: str) -> Playback | None:
         """
         Return a playback with the matching pth if found, otherwise None
 
