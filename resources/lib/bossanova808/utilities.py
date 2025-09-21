@@ -2,14 +2,16 @@ import json
 import re
 import xbmc
 import xbmcgui
+import xbmcvfs
 import xml.etree.ElementTree as ElementTree
 from urllib.parse import unquote
+from typing import Any
 
-from bossanova808.constants import *
-from bossanova808.logger import *
+from bossanova808.constants import ADDON
+from bossanova808.logger import Logger
 
 
-def set_property(window: xbmcgui.Window, name: str, value: str = None) -> None:
+def set_property(window: xbmcgui.Window, name: str, value: str | None = None) -> None:
     """
     Set a property on a window.
     To clear a property, provide an empty string or (better) use clear_property() below, instead.
@@ -95,7 +97,8 @@ def get_setting(setting: str) -> str | None:
     :param setting: The addon setting to return
     :return: the setting value, or None if not found
     """
-    return ADDON.getSetting(setting).strip()
+    value = ADDON.getSetting(setting).strip()
+    return value or None
 
 
 def get_setting_as_bool(setting: str) -> bool | None:
@@ -105,17 +108,17 @@ def get_setting_as_bool(setting: str) -> bool | None:
     :param setting: The addon setting to return
     :return: the setting value as boolean, or None if not found
     """
-    val = get_setting(setting)
-    if val is None:
+    value = get_setting(setting)
+    if value is None:
         return None
-    if val.lower() == "true":
+    if value.lower() == "true":
         return True
-    if val.lower() == "false":
+    if value.lower() == "false":
         return False
     return None
 
 
-def get_kodi_setting(setting: str) -> str | None:
+def get_kodi_setting(setting: str) -> Any | None:
     """
     Get a Kodi setting value - for settings, see https://github.com/xbmc/xbmc/blob/18f70e7ac89fd502b94b8cd8db493cc076791f39/system/settings/settings.xml
 
@@ -128,6 +131,7 @@ def get_kodi_setting(setting: str) -> str | None:
         Logger.error(f"Settings.GetSettingValue returned no result for [{setting}]")
         return None
     return properties_json['result'].get('value')
+
 
 def get_advancedsetting(setting_path: str) -> str | None:
     """
@@ -148,12 +152,16 @@ def get_advancedsetting(setting_path: str) -> str | None:
     try:
         root = ElementTree.parse(advancedsettings_file).getroot()
         Logger.info("Found and parsed advancedsettings.xml")
+
     except IOError:
         Logger.error("Could not read advancedsettings.xml")
     except ElementTree.ParseError:
         Logger.error("Could not parse advancedsettings.xml")
         return None
 
+    # If we couldn't obtain a root element, bail out safely
+    if root is None:
+        return None
     setting_element = root.find(setting_path)
     if setting_element is not None:
         return setting_element.text

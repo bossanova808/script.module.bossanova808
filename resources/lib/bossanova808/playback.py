@@ -5,6 +5,7 @@ from typing import List
 
 import xbmc
 import xbmcgui
+import xbmcvfs
 
 from bossanova808.constants import *
 from bossanova808.utilities import *
@@ -100,7 +101,7 @@ class Playback:
         self.label2 = item.getLabel2()
 
         # SOURCE - Kodi Library (...get DBID), PVR, or Non-Library Media?
-        self.dbid = int(xbmc.getInfoLabel(f'VideoPlayer.DBID')) if xbmc.getInfoLabel(f'VideoPlayer.DBID') else None
+        self.dbid = int(xbmc.getInfoLabel('VideoPlayer.DBID')) if xbmc.getInfoLabel('VideoPlayer.DBID') else None
         if self.dbid:
             self.source = "kodi_library"
         elif xbmc.getCondVisibility('PVR.IsPlayingTV') or xbmc.getCondVisibility('PVR.IsPlayingRadio'):
@@ -282,8 +283,7 @@ class PlaybackList:
         except json.JSONDecodeError:
             Logger.error(f"JSONDecodeError - Unable to parse PlaybackList file [{self.file}] -  creating empty PlaybackList & file")
             self.init()
-        except:
-            raise
+        # Let unexpected exceptions propagate
 
         Logger.info(f"PlaybackList is:", self.list)
 
