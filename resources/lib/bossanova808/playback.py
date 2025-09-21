@@ -1,5 +1,5 @@
 import os
-from json import JSONDecodeError
+import json
 from dataclasses import dataclass
 from typing import List
 
@@ -103,11 +103,11 @@ class Playback:
         self.dbid = int(xbmc.getInfoLabel(f'VideoPlayer.DBID')) if xbmc.getInfoLabel(f'VideoPlayer.DBID') else None
         if self.dbid:
             self.source = "kodi_library"
-        elif 'channels' in self.path:
+        elif xbmc.getCondVisibility('PVR.IsPlayingTV') or xbmc.getCondVisibility('PVR.IsPlayingRadio'):
             self.source = "pvr_live"
-        elif 'recordings' in self.path:
+        elif 'recordings' in (self.path or ''):
             self.source = "pvr_recording"
-        elif 'http' in self.path:
+        elif self.path and (self.path.startswith('plugin://') or self.path.startswith('http://') or self.path.startswith('https://')):
             self.source = "addon"
         else:
             Logger.info("Not from Kodi library, not PVR, not an http source - must be a non-library media file")
@@ -119,16 +119,17 @@ class Playback:
         else:
             self.title = xbmc.getInfoLabel('VideoPlayer.ChannelName')
 
-        # MEDIA TYPE - not 100% on the logic here...
+        # MEDIA TYPE (see also source above, e.g. to distinguish PVR from non library video)
+        # Infotagger/Kodi expect mediatype in {"video","movie","tvshow","season","episode","musicvideo"}.
         if xbmc.getInfoLabel('VideoPlayer.TVShowTitle'):
             self.type = "episode"
             self.tvshowdbid = int(xbmc.getInfoLabel('VideoPlayer.TvShowDBID')) if xbmc.getInfoLabel('VideoPlayer.TvShowDBID') else None
         elif self.dbid:
             self.type = "movie"
         elif xbmc.getInfoLabel('VideoPlayer.ChannelName'):
-            self.type = "pvr"
+            self.type = "video"  # use standard mediatype; PVR tracked via self.source
         else:
-            self.type = "file"
+            self.type = "video"
 
         # Initialise RESUME TIME and TOTAL TIME / DURATION
         if self.source != "pvr_live":
@@ -164,13 +165,16 @@ class Playback:
                             "tvshowid":self.tvshowdbid,
                     },
             }
+
             properties_json = send_kodi_json(f'Get seasons details for tv show {self.showtitle}', json_dict)
             if not properties_json or 'result' not in properties_json:
                 Logger.error("VideoLibrary.GetSeasons returned no result")
                 return
             properties = properties_json['result']
-            # {'limits': {'end': 2, 'start': 0, 'total': 2}, 'seasons': [{'label': 'Season 1', 'seasonid': 131094}, {'label': 'Season 2', 'seasonid': 131095}]}
-            self.totalseasons = properties['limits']['total']
+            # {'limits': {'end': 2, 'start': 0, 'total': 2}, 'seasons': [...]}
+            self.totalseasons = properties.get('limits', {}).get('total')
+            if self.totalseasons is None and 'seasons' in properties:
+                self.totalseasons = len(properties['seasons'])
 
     # noinspection PyMethodMayBeStatic
     def create_list_item_from_playback(self, offscreen: bool = False) -> xbmcgui.ListItem:
@@ -200,7 +204,7 @@ class Playback:
         #     # PVR channels are not really videos! See: https://forum.kodi.tv/showthread.php?tid=381623&pid=3232826#pid3232826
         #     # So that's all we need to do for PVR playbacks
 
-        if "pvr_live" in self.source:
+        if self.source == "pvr_live":
             return list_item
 
         # Otherwise, it's an episode/movie/file etc...set the InfoVideoTag stuff
@@ -209,7 +213,7 @@ class Playback:
         # I found directly setting things on InfoVideoTag to be buggy/inconsistent
         infolabels = {
                 'mediatype':self.type,
-                'dbid':self.dbid if self.type != 'episode' else self.tvshowdbid,
+                'dbid':self.dbid,  # previously had: if self.type != 'episode' else self.tvshowdbid,
                 # InfoTagger throws a Key Error on this?
                 # 'tvshowdbid': self.tvshowdbid or None,
                 'title':self.title,
@@ -218,7 +222,7 @@ class Playback:
                 'tvshowtitle':self.showtitle,
                 'episode':self.episode,
                 'season':self.season,
-                'duration':self.totaltime,
+                'duration': int(self.totaltime) if self.totaltime is not None else None,
         }
         tag.set_info(infolabels)
         # Required, otherwise immediate Switchback mode won't resume properly
@@ -275,7 +279,7 @@ class PlaybackList:
         except FileNotFoundError:
             Logger.warning(f"Could not find: [{self.file}] - creating empty PlaybackList & file")
             self.init()
-        except JSONDecodeError:
+        except json.JSONDecodeError:
             Logger.error(f"JSONDecodeError - Unable to parse PlaybackList file [{self.file}] -  creating empty PlaybackList & file")
             self.init()
         except:
@@ -307,7 +311,7 @@ class PlaybackList:
 
     def find_playback_by_path(self, path: str) -> Playback | None:
         """
-        Return a playback with the matching pth if found, otherwise None
+        Return a playback with the matching path if found, otherwise None
 
         :param path: str The path to search for
         :return: Playback or None: The Playback object if found, otherwise None

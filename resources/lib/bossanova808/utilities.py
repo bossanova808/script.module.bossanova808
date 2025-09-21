@@ -124,8 +124,10 @@ def get_kodi_setting(setting: str) -> str | None:
     """
     json_dict = {"jsonrpc":"2.0", "method":"Settings.GetSettingValue", "params":{"setting":setting}, "id":1}
     properties_json = send_kodi_json(f'Get Kodi setting {setting}', json_dict)
-    return properties_json['result']['value']
-
+    if not properties_json or 'result' not in properties_json:
+        Logger.error(f"Settings.GetSettingValue returned no result for [{setting}]")
+        return None
+    return properties_json['result'].get('value')
 
 def get_advancedsetting(setting_path: str) -> str | None:
     """

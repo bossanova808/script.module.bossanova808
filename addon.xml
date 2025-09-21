@@ -5,7 +5,7 @@
     </requires>
     <extension point="xbmc.python.module" library="resources/lib" />
     <extension point="xbmc.addon.metadata">
-        <description lang="en_GB">Common code needed by bossanova808 addons</description>
+        <description lang="en_GB">Common code needed by Bossanova808 addons</description>
         <platform>all</platform>
         <license>GPL-3.0-only</license>
         <website>https://github.com/bossanova808/script.module.bossanova808</website>

@@ -11,7 +11,7 @@ Common code for all bossanova808 Kodi addons.
 
 ## Available from the Kodi Official Repository
 
-* [OzWeather](https://kodi.wiki/index.php?title=Add-on:Oz_Weather) 
+* [OzWeather](https://kodi.wiki/view/Add-on:Oz_Weather)
 * [Unpause Jumpback](https://kodi.wiki/view/Add-on:Unpause_Jumpback)
 * [Playback Resumer](https://kodi.wiki/view/Add-on:Kodi_Playback_Resumer)
 * [Check Previous Episode](https://kodi.wiki/view/Add-on:XBMC_Check_Previous_Episode)

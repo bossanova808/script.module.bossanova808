@@ -1,4 +1,5 @@
 import sys
+import re
 import xbmc
 import xbmcvfs
 import xbmcgui
@@ -18,11 +19,10 @@ ADDON_PATH = CWD = xbmcvfs.translatePath(ADDON.getAddonInfo('path'))
 TRANSLATE = LANGUAGE = ADDON.getLocalizedString
 LOG_PATH = xbmcvfs.translatePath('special://logpath')
 KODI_VERSION = xbmc.getInfoLabel('System.BuildVersion')
-# Fallback: try System.BuildVersion (e.g. "21.0.0") then default to 21 (Omega)
-try:
-    KODI_MAJOR_VERSION = int(xbmc.getInfoLabel('System.BuildVersion').split('.')[0])
-except Exception:
-    KODI_MAJOR_VERSION = 21  # explicit fallback to Kodi 21 (Omega)
+# Parse System.BuildVersion (e.g. "21.0", "21.0-Beta1", "21.0 (20.90.801)") if possible, otherwise default to 21 (Omega)
+version = xbmc.getInfoLabel('System.BuildVersion') or ''
+match = re.search(r'\d+', version)
+KODI_MAJOR_VERSION = int(match.group(0)) if match else 21
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
 HOME_WINDOW = xbmcgui.Window(10000)
 WEATHER_WINDOW = xbmcgui.Window(12600)
