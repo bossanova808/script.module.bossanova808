@@ -1,3 +1,10 @@
+v 1.0.1
+- Updates for Piers and following CodeRabbit reviews
+- Move Playback here, initially used by Switchback, later will be used by e.g. Playback resumer
+
+v1.0.0 
+- Initial release
+
 v0.0.1
-Alpha pre-release
+- Alpha pre-release
 

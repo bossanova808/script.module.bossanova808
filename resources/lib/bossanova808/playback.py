@@ -7,9 +7,8 @@ import xbmc
 import xbmcgui
 import xbmcvfs
 
-from bossanova808.constants import *
-from bossanova808.utilities import *
-from bossanova808.logger import *
+from bossanova808.utilities import clean_art_url, send_kodi_json
+from bossanova808.logger import Logger
 
 from infotagger.listitem import ListItemInfoTag
 
@@ -101,14 +100,15 @@ class Playback:
         self.label2 = item.getLabel2()
 
         # SOURCE - Kodi Library (...get DBID), PVR, or Non-Library Media?
-        self.dbid = int(xbmc.getInfoLabel('VideoPlayer.DBID')) if xbmc.getInfoLabel('VideoPlayer.DBID') else None
+        dbid_label = xbmc.getInfoLabel('VideoPlayer.DBID')
+        self.dbid = int(dbid_label) if dbid_label else None
         if self.dbid:
             self.source = "kodi_library"
         elif xbmc.getCondVisibility('PVR.IsPlayingTV') or xbmc.getCondVisibility('PVR.IsPlayingRadio'):
             self.source = "pvr_live"
         elif 'recordings' in (self.path or ''):
             self.source = "pvr_recording"
-        elif self.path and (self.path.startswith('plugin://') or self.path.startswith('http://') or self.path.startswith('https://')):
+        elif self.path and self.path.startswith(('plugin://', 'http://', 'https://')):
             self.source = "addon"
         else:
             Logger.info("Not from Kodi library, not PVR, not an http source - must be a non-library media file")
@@ -134,10 +134,11 @@ class Playback:
 
         # Initialise RESUME TIME and TOTAL TIME / DURATION
         if self.source != "pvr_live":
-            total = item.getVideoInfoTag().getResumeTimeTotal()
+            video_tag = item.getVideoInfoTag()
+            total = video_tag.getResumeTimeTotal()
             self.totaltime = self.duration = (None if total == 0.0 else total)
             # This will get updated as playback progresses (see switchback_service.py), but might as well initialise here
-            resume = item.getVideoInfoTag().getResumeTime()
+            resume = video_tag.getResumeTime()
             self.resumetime = (None if resume == 0.0 else resume)
 
         # ARTWORK - POSTER, FANART and THUMBNAIL
@@ -252,11 +253,7 @@ class PlaybackList:
 
         :return: the list of Playback objects as JSON
         """
-        temp_json = []
-        for playback in self.list:
-            temp_json.append(playback.toJson())
-        temp_json = ',\n'.join(temp_json)
-        return f"[\n{temp_json}\n]\n"
+        return json.dumps([p.__dict__ for p in self.list], ensure_ascii=False, indent=2)
 
     def init(self) -> None:
         """
@@ -272,6 +269,8 @@ class PlaybackList:
         Load a JSON-formatted PlaybackList from the PlaybackList file
         """
         Logger.info("Try to load PlaybackList from file:", self.file)
+        # Ensure we start from a clean slate before loading from disk
+        self.list = []
         try:
             with open(self.file, 'r') as switchback_list_file:
                 switchback_list_json = json.load(switchback_list_file)
