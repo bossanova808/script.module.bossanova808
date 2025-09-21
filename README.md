@@ -9,9 +9,9 @@ _script.module.bossanova808_
 
 Common code for all bossanova808 Kodi addons.
 
-**Available from the Kodi Official Repository:**
+## Available from the Kodi Official Repository
 
-* [OzWeather](https://kodi.wiki/index.php?title=Add-on:Oz_Weather]) 
+* [OzWeather](https://kodi.wiki/index.php?title=Add-on:Oz_Weather) 
 * [Unpause Jumpback](https://kodi.wiki/view/Add-on:Unpause_Jumpback)
 * [Playback Resumer](https://kodi.wiki/view/Add-on:Kodi_Playback_Resumer)
 * [Check Previous Episode](https://kodi.wiki/view/Add-on:XBMC_Check_Previous_Episode)
@@ -19,7 +19,7 @@ Common code for all bossanova808 Kodi addons.
 * [Switchback](https://kodi.wiki/view/Add-on:Switchback)
 
 
-**Available from the [Bossanova808 Repository](https://github.com/bossanova808/repository.bossanova808):**
+## Available from the [Bossanova808 Repository](https://github.com/bossanova808/repository.bossanova808)
 
 * [OzWeather Skin Patcher](https://github.com/bossanova808/repository.bossanova808)
 * [YoctoDisplay](https://github.com/bossanova808/repository.bossanova808)

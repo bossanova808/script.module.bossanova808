@@ -1,11 +1,12 @@
 import json
 import re
+import xbmc
 import xbmcgui
 import xml.etree.ElementTree as ElementTree
 from urllib.parse import unquote
 
 from bossanova808.constants import *
-from bossanova808.logger import Logger
+from bossanova808.logger import *
 
 
 def set_property(window: xbmcgui.Window, name: str, value: str = None) -> None:
@@ -48,7 +49,8 @@ def get_property(window: xbmcgui.Window, name: str) -> str | None:
     :param name: the name of the property to get
     :return: the value of the window property, or None if not set
     """
-    return window.getProperty(name)
+    value = window.getProperty(name)
+    return value if value != "" else None
 
 
 def get_property_as_bool(window: xbmcgui.Window, name: str) -> bool | None:
@@ -59,7 +61,10 @@ def get_property_as_bool(window: xbmcgui.Window, name: str) -> bool | None:
     :param name: the name of the property to get
     :return: the value of the window property in boolean form, or None if not set
     """
-    return window.getProperty(name).lower() == "true"
+    value = window.getProperty(name)
+    if value == "":
+        return None
+    return value.lower() == "true"
 
 
 def send_kodi_json(human_description: str, json_dict_or_string: str | dict) -> dict | None:
@@ -100,9 +105,12 @@ def get_setting_as_bool(setting: str) -> bool | None:
     :param setting: The addon setting to return
     :return: the setting value as boolean, or None if not found
     """
-    if get_setting(setting).lower() == "true":
+    val = get_setting(setting)
+    if val is None:
+        return None
+    if val.lower() == "true":
         return True
-    elif get_setting(setting).lower() == "false":
+    if val.lower() == "false":
         return False
     return None
 

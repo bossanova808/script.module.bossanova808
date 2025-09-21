@@ -3,11 +3,14 @@ from json import JSONDecodeError
 from dataclasses import dataclass
 from typing import List
 
-from xbmcgui import ListItem
-from infotagger.listitem import ListItemInfoTag
+import xbmc
+import xbmcgui
 
+from bossanova808.constants import *
 from bossanova808.utilities import *
-from bossanova808.logger import Logger
+from bossanova808.logger import *
+
+from infotagger.listitem import ListItemInfoTag
 
 
 @dataclass
@@ -50,9 +53,9 @@ class Playback:
         """
         label = self.title
         if self.showtitle:
-            if self.season >= 0 and self.episode >= 0:
+            if (self.season is not None and self.season >= 0) and (self.episode is not None and self.episode >= 0):
                 label = f"{self.showtitle} ({self.season}x{self.episode:02d}) - {self.title}"
-            elif self.season >= 0:
+            elif self.season is not None and self.season >= 0:
                 label = f"{self.showtitle} ({self.season}x?) - {self.title}"
             else:
                 label = f"{self.showtitle} - {self.title}"
@@ -85,7 +88,7 @@ class Playback:
         """
         return json.dumps(self, default=lambda o:o.__dict__)
 
-    def update_playback_details_from_listitem(self, item: ListItem) -> None:
+    def update_playback_details_from_listitem(self, item: xbmcgui.ListItem) -> None:
         """
         Update the Playback object with details from a playing Kodi ListItem object and InfoLabels
 
@@ -94,7 +97,7 @@ class Playback:
 
         self.path = item.getPath()
         self.label = item.getLabel()
-        self.label = item.getLabel2()
+        self.label2 = item.getLabel2()
 
         # SOURCE - Kodi Library (...get DBID), PVR, or Non-Library Media?
         self.dbid = int(xbmc.getInfoLabel(f'VideoPlayer.DBID')) if xbmc.getInfoLabel(f'VideoPlayer.DBID') else None
@@ -129,9 +132,11 @@ class Playback:
 
         # Initialise RESUME TIME and TOTAL TIME / DURATION
         if self.source != "pvr_live":
-            self.totaltime = self.duration = float(item.getVideoInfoTag().getResumeTimeTotal()) or None
+            total = item.getVideoInfoTag().getResumeTimeTotal()
+            self.totaltime = self.duration = (None if total == 0.0 else total)
             # This will get updated as playback progresses (see switchback_service.py), but might as well initialise here
-            self.resumetime = float(item.getVideoInfoTag().getResumeTime()) or None
+            resume = item.getVideoInfoTag().getResumeTime()
+            self.resumetime = (None if resume == 0.0 else resume)
 
         # ARTWORK - POSTER, FANART and THUMBNAIL
         self.poster = clean_art_url(xbmc.getInfoLabel('Player.Art(tvshow.poster)') or xbmc.getInfoLabel('Player.Art(poster)') or xbmc.getInfoLabel('Player.Art(thumb)'))
@@ -160,12 +165,15 @@ class Playback:
                     },
             }
             properties_json = send_kodi_json(f'Get seasons details for tv show {self.showtitle}', json_dict)
+            if not properties_json or 'result' not in properties_json:
+                Logger.error("VideoLibrary.GetSeasons returned no result")
+                return
             properties = properties_json['result']
             # {'limits': {'end': 2, 'start': 0, 'total': 2}, 'seasons': [{'label': 'Season 1', 'seasonid': 131094}, {'label': 'Season 2', 'seasonid': 131095}]}
             self.totalseasons = properties['limits']['total']
 
     # noinspection PyMethodMayBeStatic
-    def create_list_item_from_playback(self, offscreen: bool = False) -> ListItem:
+    def create_list_item_from_playback(self, offscreen: bool = False) -> xbmcgui.ListItem:
         """
         Create a Kodi ListItem object from a Playback object
 
@@ -295,7 +303,7 @@ class PlaybackList:
         """
         Remove any playbacks of a given path from the PlaybackList
         """
-        self.list = list(filter(lambda x:x.path == path, self.list))
+        self.list = [x for x in self.list if x.path != path]
 
     def find_playback_by_path(self, path: str) -> Playback | None:
         """
