@@ -154,9 +154,9 @@ def get_advancedsetting(setting_path: str) -> str | None:
         Logger.info("Found and parsed advancedsettings.xml")
 
     except IOError:
-        Logger.error("Could not read advancedsettings.xml")
+        Logger.warning("Found, but could not read advancedsettings.xml")
     except ElementTree.ParseError:
-        Logger.error("Could not parse advancedsettings.xml")
+        Logger.warning("Found, but could not parse advancedsettings.xml")
         return None
 
     # If we couldn't obtain a root element, bail out safely
@@ -166,7 +166,7 @@ def get_advancedsetting(setting_path: str) -> str | None:
     if setting_element is not None:
         return setting_element.text
 
-    Logger.error(f"Setting [{setting_path}] not found in advancedsettings.xml")
+    Logger.debug(f"Setting [{setting_path}] not found in advancedsettings.xml")
     return None
 
 

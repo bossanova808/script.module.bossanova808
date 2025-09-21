@@ -106,9 +106,9 @@ class Playback:
             self.source = "kodi_library"
         elif xbmc.getCondVisibility('PVR.IsPlayingTV') or xbmc.getCondVisibility('PVR.IsPlayingRadio'):
             self.source = "pvr_live"
-        elif 'recordings' in (self.path or ''):
+        elif (self.path or '').lower().startswith('pvr://recordings/'):
             self.source = "pvr_recording"
-        elif self.path and self.path.startswith(('plugin://', 'http://', 'https://')):
+        elif (self.path or '').lower().startswith(('plugin://', 'http://', 'https://')):
             self.source = "addon"
         else:
             Logger.info("Not from Kodi library, not PVR, not an http source - must be a non-library media file")
@@ -135,16 +135,21 @@ class Playback:
         # Initialise RESUME TIME and TOTAL TIME / DURATION
         if self.source != "pvr_live":
             video_tag = item.getVideoInfoTag()
-            total = video_tag.getResumeTimeTotal()
-            self.totaltime = self.duration = (None if total == 0.0 else total)
-            # This will get updated as playback progresses (see switchback_service.py), but might as well initialise here
-            resume = video_tag.getResumeTime()
-            self.resumetime = (None if resume == 0.0 else resume)
+            if video_tag:
+                total = video_tag.getResumeTimeTotal()
+                self.totaltime = self.duration = (None if total == 0.0 else total)
+                # This will get updated as playback progresses (see switchback_service.py), but might as well initialise here
+                resume = video_tag.getResumeTime()
+                self.resumetime = (None if resume == 0.0 else resume)
+            else:
+                self.totaltime = self.duration = None
+                self.resumetime = None
 
         # ARTWORK - POSTER, FANART and THUMBNAIL
         self.poster = clean_art_url(xbmc.getInfoLabel('Player.Art(tvshow.poster)') or xbmc.getInfoLabel('Player.Art(poster)') or xbmc.getInfoLabel('Player.Art(thumb)'))
         self.fanart = clean_art_url(xbmc.getInfoLabel('Player.Art(fanart)'))
-        self.thumbnail = clean_art_url(xbmc.getInfoLabel('Player.Art(thumb)') or item.getArt('thumb'))
+        thumbnail_value = xbmc.getInfoLabel('Player.Art(thumb)') or (item.getArt('thumb') or '')
+        self.thumbnail = clean_art_url(thumbnail_value)
 
         # OTHER DETAILS
         # PVR Live/Recordings
@@ -174,7 +179,8 @@ class Playback:
                 return
             properties = properties_json['result']
             # {'limits': {'end': 2, 'start': 0, 'total': 2}, 'seasons': [...]}
-            self.totalseasons = properties.get('limits', {}).get('total')
+            total_limit = properties.get('limits', {}).get('total')
+            self.totalseasons = total_limit if isinstance(total_limit, int) else None
             if self.totalseasons is None and 'seasons' in properties:
                 self.totalseasons = len(properties['seasons'])
 
@@ -228,7 +234,7 @@ class Playback:
         }
         tag.set_info(infolabels)
         # Required, otherwise immediate Switchback mode won't resume properly
-        tag.set_resume_point({'ResumeTime':self.resumetime, 'TotalTime':self.totaltime})
+        tag.set_resume_point({'ResumeTime': float(self.resumetime or 0.0), 'TotalTime': float(self.totaltime or 0.0)})
         if self.tvshowdbid:
             list_item.setProperty('tvshowdbid', str(self.tvshowdbid))
 
@@ -261,8 +267,8 @@ class PlaybackList:
         """
         self.list = []
         xbmcvfs.mkdirs(os.path.dirname(self.file))
-        with open(self.file, 'w'):
-            pass
+        with open(self.file, 'w', encoding='utf-8') as switchback_list_file:
+            switchback_list_file.write('[]')
 
     def load_or_init(self) -> None:
         """
@@ -272,7 +278,7 @@ class PlaybackList:
         # Ensure we start from a clean slate before loading from disk
         self.list = []
         try:
-            with open(self.file, 'r') as switchback_list_file:
+            with open(self.file, 'r', encoding='utf-8') as switchback_list_file:
                 switchback_list_json = json.load(switchback_list_file)
                 for playback in switchback_list_json:
                     self.list.append(Playback(**playback))
@@ -291,8 +297,12 @@ class PlaybackList:
         Save the PlaybackList to the PlaybackList file (as JSON)
         """
         Logger.info(f"Saving PlaybackList to file: {self.file}")
-        with open(self.file, 'w', encoding='utf-8') as f:
-            f.write(self.toJson())
+        import tempfile
+        directory_name = os.path.dirname(self.file)
+        with tempfile.NamedTemporaryFile('w', delete=False, encoding='utf-8', dir=directory_name) as temp_file:
+            temp_file.write(self.toJson())
+            temporary_name = temp_file.name
+        os.replace(temporary_name, self.file)
 
     def delete_file(self) -> None:
         """
