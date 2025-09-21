@@ -121,7 +121,7 @@ class Playback:
 
         # TITLE
         if self.source != "pvr_live":
-            self.title = xbmc.getInfoLabel(f'VideoPlayer.Title')
+            self.title = xbmc.getInfoLabel('VideoPlayer.Title')
         else:
             self.title = xbmc.getInfoLabel('VideoPlayer.ChannelName')
 
@@ -162,7 +162,7 @@ class Playback:
         self.channelnumberlabel = xbmc.getInfoLabel('VideoPlayer.ChannelNumberLabel')
         self.channelgroup = xbmc.getInfoLabel('VideoPlayer.ChannelGroup')
         # Episodes & Movies
-        self.year = int(xbmc.getInfoLabel(f'VideoPlayer.Year')) if xbmc.getInfoLabel(f'VideoPlayer.Year') else None
+        self.year = int(xbmc.getInfoLabel('VideoPlayer.Year')) if xbmc.getInfoLabel('VideoPlayer.Year') else None
         # Episodes
         self.showtitle = xbmc.getInfoLabel('VideoPlayer.TVShowTitle')
         self.season = int(xbmc.getInfoLabel('VideoPlayer.Season')) if xbmc.getInfoLabel('VideoPlayer.Season') else None
@@ -206,7 +206,7 @@ class Playback:
         :return: ListItem: a Kodi ListItem object constructed from the Playback object
         """
 
-        Logger.debug(f"Creating list item from playback:", self)
+        Logger.debug("Creating list item from playback:", self)
 
         path = self.path
         list_item = xbmcgui.ListItem(label=self.pluginlabel, path=path, offscreen=offscreen)
@@ -241,11 +241,11 @@ class Playback:
                 'tvshowtitle':self.showtitle,
                 'episode':self.episode,
                 'season':self.season,
-                'duration': int(self.totaltime) if self.totaltime is not None else None,
+                'duration':int(self.totaltime) if self.totaltime is not None else None,
         }
         tag.set_info(infolabels)
         # Required, otherwise immediate Switchback mode won't resume properly
-        tag.set_resume_point({'ResumeTime': float(self.resumetime or 0.0), 'TotalTime': float(self.totaltime or 0.0)})
+        tag.set_resume_point({'position':float(self.resumetime or 0.0), 'total':float(self.totaltime or 0.0)})
         if self.tvshowdbid:
             list_item.setProperty('tvshowdbid', str(self.tvshowdbid))
 
@@ -306,7 +306,7 @@ class PlaybackList:
             self.init()
         # Let unexpected exceptions propagate
 
-        Logger.info(f"PlaybackList is:", self.list)
+        Logger.info("PlaybackList is:", self.list)
 
     def save_to_file(self) -> None:
         """
@@ -317,7 +317,8 @@ class PlaybackList:
         directory_name = os.path.dirname(self.file)
         if directory_name:
             xbmcvfs.mkdirs(directory_name)
-        with tempfile.NamedTemporaryFile('w', delete=False, encoding='utf-8', dir=directory_name) as temp_file:
+            temp_dir = directory_name or None
+        with tempfile.NamedTemporaryFile('w', delete=False, encoding='utf-8', dir=temp_dir) as temp_file:
             temp_file.write(self.toJson())
             temporary_name = temp_file.name
         os.replace(temporary_name, self.file)

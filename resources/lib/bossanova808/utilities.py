@@ -80,7 +80,7 @@ def send_kodi_json(human_description: str, json_dict_or_string: str | dict) -> d
 
     :param human_description: A textual description of the command being sent to KODI. Helpful for debugging.
     :param json_dict_or_string: The JSON RPC command to be sent to KODI, as a dict or string
-    :return: A dictionary of the parsed JSON response returned by KODI or `None` if the response cannot be parsed successfully.
+    :return: Parsed KODI JSON response as a dict. Returns None only if parsing fails. On RPC errors, a dict containing an "error" key is returned.
     """
     Logger.debug(f'KODI JSON RPC command: {human_description}', json_dict_or_string)
     if isinstance(json_dict_or_string, dict):
@@ -89,12 +89,13 @@ def send_kodi_json(human_description: str, json_dict_or_string: str | dict) -> d
     try:
         result = json.loads(result)
     except json.JSONDecodeError:
-        Logger.error(f'Unable to parse JSON RPC result from KODI:',result)
+        Logger.error('Unable to parse JSON RPC result from KODI:', result)
         return None
+
     if isinstance(result, dict) and 'error' in result:
         Logger.error(f'KODI JSON RPC error for {human_description}:', result)
         return result
-    Logger.debug(f'KODI JSON RPC result:', result)
+    Logger.debug('KODI JSON RPC result:', result)
     return result
 
 
