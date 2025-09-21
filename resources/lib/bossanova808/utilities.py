@@ -14,7 +14,7 @@ from bossanova808.logger import Logger
 def set_property(window: xbmcgui.Window, name: str, value: str | None = None) -> None:
     """
     Set a property on a window.
-    To clear a property, provide an empty string or (better) use clear_property() below, instead.
+    To clear a property use clear_property()
 
     :param window: The Kodi window on which to set the property.
     :param name:Name of the property.
@@ -64,9 +64,14 @@ def get_property_as_bool(window: xbmcgui.Window, name: str) -> bool | None:
     :return: the value of the window property in boolean form, or None if not set
     """
     value = window.getProperty(name)
-    if value == "":
+    if not value:
         return None
-    return value.lower() == "true"
+    lowered = value.lower()
+    if lowered in ("true", "1", "yes", "on"):
+        return True
+    if lowered in ("false", "0", "no", "off"):
+        return False
+    return None
 
 
 def send_kodi_json(human_description: str, json_dict_or_string: str | dict) -> dict | None:
@@ -162,7 +167,10 @@ def get_advancedsetting(setting_path: str) -> str | None:
     # If we couldn't obtain a root element, bail out safely
     if root is None:
         return None
-    setting_element = root.find(setting_path)
+    # Normalise: accept either 'section/setting' or './section/setting'
+    normalised_path = setting_path if setting_path.startswith('.') else f'./{setting_path.lstrip("./")}'
+    setting_element = root.find(normalised_path)
+
     if setting_element is not None:
         return setting_element.text
 

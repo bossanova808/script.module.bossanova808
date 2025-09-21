@@ -51,7 +51,7 @@ class Playback:
 
         :return: The Switchback label for display in the plugin list
         """
-        label = self.title
+        label = self.title or self.label or self.channelname or (os.path.basename(self.path) if self.path else None) or "Unknown"
         if self.showtitle:
             if (self.season is not None and self.season >= 0) and (self.episode is not None and self.episode >= 0):
                 label = f"{self.showtitle} ({self.season}x{self.episode:02d}) - {self.title}"
@@ -176,7 +176,10 @@ class Playback:
             properties_json = send_kodi_json(f'Get seasons details for tv show {self.showtitle}', json_dict)
             if not properties_json or 'result' not in properties_json:
                 Logger.error("VideoLibrary.GetSeasons returned no result")
+                self.totalseasons = None
+                # Continue without seasons info
                 return
+
             properties = properties_json['result']
             # {'limits': {'end': 2, 'start': 0, 'total': 2}, 'seasons': [...]}
             total_limit = properties.get('limits', {}).get('total')
@@ -299,6 +302,8 @@ class PlaybackList:
         Logger.info(f"Saving PlaybackList to file: {self.file}")
         import tempfile
         directory_name = os.path.dirname(self.file)
+        if directory_name:
+            xbmcvfs.mkdirs(directory_name)
         with tempfile.NamedTemporaryFile('w', delete=False, encoding='utf-8', dir=directory_name) as temp_file:
             temp_file.write(self.toJson())
             temporary_name = temp_file.name
