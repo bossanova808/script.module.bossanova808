@@ -63,10 +63,10 @@ def get_property_as_bool(window: xbmcgui.Window, name: str) -> bool | None:
     :param name: the name of the property to get
     :return: the value of the window property in boolean form, or None if not set
     """
-    value = window.getProperty(name)
-    if not value:
+    value = get_property(window, name)
+    if value is None:
         return None
-    lowered = value.lower()
+    lowered = value.strip().lower()
     if lowered in ("true", "1", "yes", "on"):
         return True
     if lowered in ("false", "0", "no", "off"):
@@ -91,6 +91,9 @@ def send_kodi_json(human_description: str, json_dict_or_string: str | dict) -> d
     except json.JSONDecodeError:
         Logger.error(f'Unable to parse JSON RPC result from KODI:',result)
         return None
+    if isinstance(result, dict) and 'error' in result:
+        Logger.error(f'KODI JSON RPC error for {human_description}:', result)
+        return result
     Logger.debug(f'KODI JSON RPC result:', result)
     return result
 
@@ -116,9 +119,10 @@ def get_setting_as_bool(setting: str) -> bool | None:
     value = get_setting(setting)
     if value is None:
         return None
-    if value.lower() == "true":
+    lowered = value.lower()
+    if lowered in ("true", "1", "yes", "on"):
         return True
-    if value.lower() == "false":
+    if lowered in ("false", "0", "no", "off"):
         return False
     return None
 
@@ -132,7 +136,13 @@ def get_kodi_setting(setting: str) -> Any | None:
     """
     json_dict = {"jsonrpc":"2.0", "method":"Settings.GetSettingValue", "params":{"setting":setting}, "id":1}
     properties_json = send_kodi_json(f'Get Kodi setting {setting}', json_dict)
-    if not properties_json or 'result' not in properties_json:
+    if not properties_json:
+        Logger.error(f"Settings.GetSettingValue returned no response for [{setting}]")
+        return None
+    if 'error' in properties_json:
+        Logger.error(f"Settings.GetSettingValue returned error for [{setting}]:", properties_json['error'])
+        return None
+    if 'result' not in properties_json:
         Logger.error(f"Settings.GetSettingValue returned no result for [{setting}]")
         return None
     return properties_json['result'].get('value')
@@ -172,7 +182,8 @@ def get_advancedsetting(setting_path: str) -> str | None:
     setting_element = root.find(normalised_path)
 
     if setting_element is not None:
-        return setting_element.text
+        text = (setting_element.text or "").strip()
+        return text or None
 
     Logger.debug(f"Setting [{setting_path}] not found in advancedsettings.xml")
     return None

@@ -54,16 +54,17 @@ class Playback:
         label = self.title or self.label or self.channelname or (os.path.basename(self.path) if self.path else None) or "Unknown"
         if self.showtitle:
             if (self.season is not None and self.season >= 0) and (self.episode is not None and self.episode >= 0):
-                label = f"{self.showtitle} ({self.season}x{self.episode:02d}) - {self.title}"
+                label = f"{self.showtitle} ({self.season}x{self.episode:02d}) - {self.title or label}"
             elif self.season is not None and self.season >= 0:
-                label = f"{self.showtitle} ({self.season}x?) - {self.title}"
+                label = f"{self.showtitle} ({self.season}x?) - {self.title or label}"
             else:
-                label = f"{self.showtitle} - {self.title}"
+                label = f"{self.showtitle} - {self.title or label}"
         elif self.channelname:
             if self.source == "pvr_live":
                 label = f"{self.channelname} (PVR Live)"
             else:
-                label = f"{self.title} (PVR Recording {self.channelname})"
+                label = f"{label} (PVR Recording {self.channelname})"
+
         if self.source == "addon":
             label = f"{label} (Addon)"
         return label
@@ -101,7 +102,11 @@ class Playback:
 
         # SOURCE - Kodi Library (...get DBID), PVR, or Non-Library Media?
         dbid_label = xbmc.getInfoLabel('VideoPlayer.DBID')
-        self.dbid = int(dbid_label) if dbid_label else None
+        try:
+            self.dbid = int(dbid_label) if dbid_label else None
+        except ValueError:
+            self.dbid = None
+
         if self.dbid:
             self.source = "kodi_library"
         elif xbmc.getCondVisibility('PVR.IsPlayingTV') or xbmc.getCondVisibility('PVR.IsPlayingRadio'):
@@ -180,7 +185,12 @@ class Playback:
                 # Continue without seasons info
                 return
 
+            if 'error' in properties_json:
+                Logger.error("VideoLibrary.GetSeasons returned error:", properties_json['error'])
+                self.totalseasons = None
+                return
             properties = properties_json['result']
+
             # {'limits': {'end': 2, 'start': 0, 'total': 2}, 'seasons': [...]}
             total_limit = properties.get('limits', {}).get('total')
             self.totalseasons = total_limit if isinstance(total_limit, int) else None
@@ -200,9 +210,7 @@ class Playback:
 
         path = self.path
         list_item = xbmcgui.ListItem(label=self.pluginlabel, path=path, offscreen=offscreen)
-        list_item.setArt({"thumb":self.thumbnail})
-        list_item.setArt({"poster":self.poster})
-        list_item.setArt({"fanart":self.fanart})
+        list_item.setArt({"thumb":self.thumbnail, "poster":self.poster, "fanart":self.fanart})
         list_item.setProperty('IsPlayable', 'true')
 
         # if "pvr" in self.source:
@@ -283,8 +291,13 @@ class PlaybackList:
         try:
             with open(self.file, 'r', encoding='utf-8') as switchback_list_file:
                 switchback_list_json = json.load(switchback_list_file)
+                if not isinstance(switchback_list_json, list):
+                    Logger.error(f"PlaybackList file [{self.file}] did not contain a JSON array — reinitialising")
+                    self.init()
+                    return
                 for playback in switchback_list_json:
                     self.list.append(Playback(**playback))
+
         except FileNotFoundError:
             Logger.warning(f"Could not find: [{self.file}] - creating empty PlaybackList & file")
             self.init()
