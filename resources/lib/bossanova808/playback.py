@@ -296,7 +296,8 @@ class Playback:
 
         tag.set_info(infolabels)
         # Required, otherwise immediate Switchback mode won't resume properly
-        tag.set_resume_point({'position':float(self.resumetime or 0.0), 'total':float(self.totaltime or 0.0)})
+        # These keys are correct, even if CodeRabbit says they are not - see https://github.com/jurialmunkey/script.module.infotagger/blob/f138c1dd7201a8aff7541292fbfc61ed7b3a9aa1/resources/modules/infotagger/listitem.py#L204
+        tag.set_resume_point({'ResumeTime':float(self.resumetime or 0.0), 'TotalTime':float(self.totaltime or 0.0)})
         if self.tvshowdbid:
             list_item.setProperty('tvshowdbid', str(self.tvshowdbid))
 
