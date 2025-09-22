@@ -1,6 +1,6 @@
 import os
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import List
 
 import xbmc
@@ -22,8 +22,8 @@ class Playback:
     path: str | None = None
     type: str | None = None  # episode, movie, video (per Kodi types) - song is the other type, but Switchback supports video only
     # Seems to be a newer version of the above, but unclear how/when to use, and what about music??
-    # mediatype: str = None # mediatype: string - "video", "movie", "tvshow", "season", "episode" or "musicvideo"
-    source: str = None  # kodi_library, pvr_live, pvr_recording, addon, file
+    # mediatype: str | None = None # mediatype: string - "video", "movie", "tvshow", "season", "episode" or "musicvideo"
+    source: str | None = None  # kodi_library, pvr_live, pvr_recording, addon, file
     dbid: int | None = None
     tvshowdbid: int | None = None
     totalseasons: int | None = None
@@ -33,10 +33,10 @@ class Playback:
     thumbnail: str | None = None
     fanart: str | None = None
     poster: str | None = None
-    year: int = None
-    showtitle: str = None
+    year: int | None = None
+    showtitle: str |None = None
     season: int | None = None
-    episode: int = None
+    episode: int | None = None
     resumetime: float | None = None
     totaltime: float | None = None
     duration: float | None = None
@@ -75,13 +75,15 @@ class Playback:
 
         :return: True if playback is from an addon, False otherwise
         """
+        path_lower = (self.path or '').lower()
+
         # Method 1: Check for plugin:// URLs (most reliable)
-        if (self.path or '').lower().startswith('plugin://'):
+        if path_lower.startswith('plugin://'):
             return True
 
         # Method 2: Check ListItem.Path infolabel for plugin URLs
-        listitem_path = xbmc.getInfoLabel('ListItem.Path')
-        if listitem_path.startswith('plugin://'):
+        listitem_path_lower = xbmc.getInfoLabel('ListItem.Path').lower()
+        if listitem_path_lower.startswith('plugin://'):
             return True
 
         # Method 3: Check if an addon ID is associated with the current item
@@ -90,12 +92,12 @@ class Playback:
             return True
 
         # Method 4: Check container path (for addon-generated content)
-        container_path = xbmc.getInfoLabel('Container.FolderPath')
-        if container_path.startswith('plugin://'):
+        container_path_lower = xbmc.getInfoLabel('Container.FolderPath').lower()
+        if container_path_lower.startswith('plugin://'):
             return True
 
         # Method 5: Improved HTTP detection with WebDAV exclusions (fallback only)
-        if (self.path or '').lower().startswith(('http://', 'https://')):
+        if path_lower.startswith(('http://', 'https://')):
             # Exclude known WebDAV/cloud storage patterns
             webdav_patterns = [
                     '/dav/',
@@ -108,7 +110,6 @@ class Playback:
                     'onedrive'
             ]
 
-            path_lower = self.path.lower()
             if not any(pattern in path_lower for pattern in webdav_patterns):
                 # Additional check: look for typical addon URL structures
                 if any(indicator in path_lower for indicator in ['plugin', 'addon', 'stream']):
@@ -134,7 +135,7 @@ class Playback:
 
         :return: the Playback object as JSON
         """
-        return json.dumps(self, default=lambda o:o.__dict__)
+        return json.dumps(asdict(self))
 
     def update_playback_details_from_listitem(self, item: xbmcgui.ListItem) -> None:
         """
@@ -163,7 +164,7 @@ class Playback:
         elif self._is_addon_playback():
             self.source = "addon"
         else:
-            Logger.info("Not from Kodi library, not PVR, not an http source - must be a non-library media file")
+            Logger.info("Not from Kodi library or PVR or addon – treating as a non-library media file")
             self.source = "file"
 
         # TITLE
@@ -209,11 +210,23 @@ class Playback:
         self.channelnumberlabel = xbmc.getInfoLabel('VideoPlayer.ChannelNumberLabel')
         self.channelgroup = xbmc.getInfoLabel('VideoPlayer.ChannelGroup')
         # Episodes & Movies
-        self.year = int(xbmc.getInfoLabel('VideoPlayer.Year')) if xbmc.getInfoLabel('VideoPlayer.Year') else None
+        year_label = xbmc.getInfoLabel('VideoPlayer.Year')
+        try:
+            self.year = int(year_label) if year_label else None
+        except ValueError:
+            self.year = None
         # Episodes
         self.showtitle = xbmc.getInfoLabel('VideoPlayer.TVShowTitle')
-        self.season = int(xbmc.getInfoLabel('VideoPlayer.Season')) if xbmc.getInfoLabel('VideoPlayer.Season') else None
-        self.episode = int(xbmc.getInfoLabel('VideoPlayer.Episode')) if xbmc.getInfoLabel('VideoPlayer.Episode') else None
+        season_label = xbmc.getInfoLabel('VideoPlayer.Season')
+        episode_label = xbmc.getInfoLabel('VideoPlayer.Episode')
+        try:
+            self.season = int(season_label) if season_label else None
+        except ValueError:
+            self.season = None
+        try:
+            self.episode = int(episode_label) if episode_label else None
+        except ValueError:
+            self.episode = None
         # Episodes -> we also want the number of seasons so we can force-browse to the appropriate spot after a Swtichback initiated playback
         if self.tvshowdbid:
             json_dict = {
@@ -257,7 +270,9 @@ class Playback:
 
         path = self.path
         list_item = xbmcgui.ListItem(label=self.pluginlabel, path=path, offscreen=offscreen)
-        list_item.setArt({"thumb":self.thumbnail, "poster":self.poster, "fanart":self.fanart})
+        art = {k:v for k, v in {"thumb":self.thumbnail, "poster":self.poster, "fanart":self.fanart}.items() if v}
+        if art:
+            list_item.setArt(art)
         list_item.setProperty('IsPlayable', 'true')
 
         # if "pvr" in self.source:
@@ -289,7 +304,10 @@ class Playback:
                 'tvshowtitle':self.showtitle,
                 'episode':self.episode,
                 'season':self.season,
-                'duration':int(self.totaltime) if self.totaltime is not None else None,
+                'duration': (
+                    int(self.duration) if self.duration is not None
+                    else (int(self.totaltime) if self.totaltime is not None else None)
+                ),
         }
 
         Logger.debug("^^^ Setting infolabels with:", infolabels)
@@ -367,9 +385,11 @@ class PlaybackList:
         Logger.info(f"Saving PlaybackList to file: {self.file}")
         import tempfile
         directory_name = os.path.dirname(self.file)
+        temp_dir = None
+        directory_name = os.path.dirname(self.file)
         if directory_name:
             xbmcvfs.mkdirs(directory_name)
-            temp_dir = directory_name or None
+            temp_dir = directory_name
         with tempfile.NamedTemporaryFile('w', delete=False, encoding='utf-8', dir=temp_dir) as temp_file:
             temp_file.write(self.toJson())
             temporary_name = temp_file.name
