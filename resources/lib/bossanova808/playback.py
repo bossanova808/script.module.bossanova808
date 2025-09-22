@@ -1,7 +1,7 @@
 import os
 import json
 from dataclasses import dataclass, asdict
-from typing import List
+from typing import List, Optional
 
 import xbmc
 import xbmcgui
@@ -18,31 +18,31 @@ class Playback:
     """
     Stores whatever data we can grab about a Kodi Playback so that we can display it nicely in the Switchback list
     """
-    file: str | None = None
-    path: str | None = None
-    type: str | None = None  # episode, movie, video (per Kodi types) - song is the other type, but Switchback supports video only
+    file: Optional[str] = None
+    path: Optional[str] = None
+    type: Optional[str] = None  # episode, movie, video (per Kodi types) - song is the other type, but Switchback supports video only
     # Seems to be a newer version of the above, but unclear how/when to use, and what about music??
     # mediatype: str | None = None # mediatype: string - "video", "movie", "tvshow", "season", "episode" or "musicvideo"
-    source: str | None = None  # kodi_library, pvr_live, pvr_recording, addon, file
-    dbid: int | None = None
-    tvshowdbid: int | None = None
-    totalseasons: int | None = None
-    title: str | None = None
-    label: str | None = None
-    label2: str | None = None
-    thumbnail: str | None = None
-    fanart: str | None = None
-    poster: str | None = None
-    year: int | None = None
-    showtitle: str | None = None
-    season: int | None = None
-    episode: int | None = None
-    resumetime: float | None = None
-    totaltime: float | None = None
-    duration: float | None = None
-    channelname: str | None = None
-    channelnumberlabel: str | None = None
-    channelgroup: str | None = None
+    source: Optional[str] = None  # kodi_library, pvr_live, pvr_recording, addon, file
+    dbid: Optional[int] = None
+    tvshowdbid: Optional[int] = None
+    totalseasons: Optional[int] = None
+    title: Optional[str] = None
+    label: Optional[str] = None
+    label2: Optional[str] = None
+    thumbnail: Optional[str] = None
+    fanart: Optional[str] = None
+    poster: Optional[str] = None
+    year: Optional[int] = None
+    showtitle: Optional[str] = None
+    season: Optional[int] = None
+    episode: Optional[int] = None
+    resumetime: Optional[float] = None
+    totaltime: Optional[float] = None
+    duration: Optional[float] = None
+    channelname: Optional[str] = None
+    channelnumberlabel: Optional[str] = None
+    channelgroup: Optional[str] = None
 
     @property
     def pluginlabel(self) -> str:
@@ -96,18 +96,11 @@ class Playback:
         if container_path_lower.startswith('plugin://'):
             return True
 
-        # Method 5: Improved HTTP detection with WebDAV exclusions (fallback only)
+        # Method 5: Conservative HTTP fallback for local addon proxies only
         if path_lower.startswith(('http://', 'https://')):
             # Exclude known WebDAV/cloud storage patterns
             webdav_patterns = [
-                    '/dav/',
-                    'webdav',
-                    '.nextcloud.',
-                    'owncloud',
-                    '/remote.php/',
-                    'dropbox',
-                    'googledrive',
-                    'onedrive'
+                '/dav/', 'webdav', '.nextcloud.', 'owncloud', '/remote.php/', 'dropbox', 'googledrive', 'onedrive'
             ]
 
             if not any(pattern in path_lower for pattern in webdav_patterns):
@@ -115,6 +108,15 @@ class Playback:
                 if any(indicator in path_lower for indicator in ('plugin', 'addon')):
                     Logger.debug("Classified as addon via HTTP fallback heuristic", path_lower)
                     return True
+            # If we still have an Addon.ID or container is a plugin, treat as addon
+            addon_id_http = xbmc.getInfoLabel('ListItem.Property(Addon.ID)')
+            container_path_lower_http = xbmc.getInfoLabel('Container.FolderPath').lower()
+            if addon_id_http or container_path_lower_http.startswith('plugin://'):
+                return True
+            # Accept loopback hosts commonly used by addon proxy/resolvers
+            if any(host in path_lower for host in ('127.0.0.1', 'localhost', '[::1]')):
+                Logger.debug("Classified as addon via localhost HTTP fallback", path_lower)
+                return True
 
         return False
 
@@ -165,7 +167,7 @@ class Playback:
         elif self._is_addon_playback():
             self.source = "addon"
         else:
-            Logger.info("Not from Kodi library, PVR, or addon - treating as a non-library media file")
+            Logger.debug("Not from Kodi library, PVR, or addon - treating as a non-library media file")
             self.source = "file"
 
         # TITLE
@@ -178,7 +180,12 @@ class Playback:
         # Infotagger/Kodi expect mediatype in {"video","movie","tvshow","season","episode","musicvideo"}.
         if xbmc.getInfoLabel('VideoPlayer.TVShowTitle'):
             self.type = "episode"
-            self.tvshowdbid = int(xbmc.getInfoLabel('VideoPlayer.TvShowDBID')) if xbmc.getInfoLabel('VideoPlayer.TvShowDBID') else None
+            tvshowdbid_label = xbmc.getInfoLabel('VideoPlayer.TvShowDBID')
+            try:
+                self.tvshowdbid = int(tvshowdbid_label) if tvshowdbid_label else None
+            except ValueError:
+                self.tvshowdbid = None
+
         elif self.dbid:
             self.type = "movie"
         elif xbmc.getInfoLabel('VideoPlayer.ChannelName'):
@@ -293,10 +300,12 @@ class Playback:
         # Otherwise, it's an episode/movie/file etc...set the InfoVideoTag stuff
         tag = ListItemInfoTag(list_item, "video")
         # Infotagger seems the best way to do this currently as is well tested
-        duration_seconds = (
-                int(self.duration) if self.duration is not None
-                else (int(self.totaltime) if self.totaltime is not None else None)
-        )
+        duration_seconds = None
+        if self.duration is not None:
+            duration_seconds = max(0, int(round(self.duration)))
+        elif self.totaltime is not None:
+            duration_seconds = max(0, int(round(self.totaltime)))
+
         # I found directly setting things on InfoVideoTag to be buggy/inconsistent
         infolabels = {
                 'mediatype':self.type,
@@ -309,8 +318,10 @@ class Playback:
                 'tvshowtitle':self.showtitle,
                 'episode':self.episode,
                 'season':self.season,
-                'duration': duration_seconds,
         }
+        if duration_seconds is not None:
+            infolabels['duration'] = duration_seconds
+
 
         Logger.debug("^^^ Setting infolabels with:", infolabels)
 
@@ -410,7 +421,7 @@ class PlaybackList:
         """
         self.list = [x for x in self.list if x.path != path]
 
-    def find_playback_by_path(self, path: str) -> Playback | None:
+    def find_playback_by_path(self, path: str) -> Optional[Playback]:
         """
         Return a playback with the matching path if found, otherwise None
 
