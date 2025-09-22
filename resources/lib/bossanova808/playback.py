@@ -18,31 +18,31 @@ class Playback:
     """
     Stores whatever data we can grab about a Kodi Playback so that we can display it nicely in the Switchback list
     """
-    file: str = None
-    path: str = None
-    type: str = None  # episode, movie, video (per Kodi types) - song is the other type, but Switchback supports video only
+    file: str | None = None
+    path: str | None = None
+    type: str | None = None  # episode, movie, video (per Kodi types) - song is the other type, but Switchback supports video only
     # Seems to be a newer version of the above, but unclear how/when to use, and what about music??
     # mediatype: str = None # mediatype: string - "video", "movie", "tvshow", "season", "episode" or "musicvideo"
     source: str = None  # kodi_library, pvr_live, pvr_recording, addon, file
-    dbid: int = None
-    tvshowdbid: int = None
-    totalseasons: int = None
-    title: str = None
-    label: str = None
-    label2: str = None
-    thumbnail: str = None
-    fanart: str = None
-    poster: str = None
+    dbid: int | None = None
+    tvshowdbid: int | None = None
+    totalseasons: int | None = None
+    title: str | None = None
+    label: str | None = None
+    label2: str | None = None
+    thumbnail: str | None = None
+    fanart: str | None = None
+    poster: str | None = None
     year: int = None
     showtitle: str = None
-    season: int = None
+    season: int | None = None
     episode: int = None
-    resumetime: float = None
-    totaltime: float = None
-    duration: float = None
-    channelname: str = None
-    channelnumberlabel: str = None
-    channelgroup: str = None
+    resumetime: float | None = None
+    totaltime: float | None = None
+    duration: float | None = None
+    channelname: str | None = None
+    channelnumberlabel: str | None = None
+    channelgroup: str | None = None
 
     @property
     def pluginlabel(self) -> str:
@@ -68,6 +68,53 @@ class Playback:
         if self.source == "addon":
             label = f"{label} (Addon)"
         return label
+
+    def _is_addon_playback(self) -> bool:
+        """
+        Determine if playback originates from an addon
+
+        :return: True if playback is from an addon, False otherwise
+        """
+        # Method 1: Check for plugin:// URLs (most reliable)
+        if (self.path or '').lower().startswith('plugin://'):
+            return True
+
+        # Method 2: Check ListItem.Path infolabel for plugin URLs
+        listitem_path = xbmc.getInfoLabel('ListItem.Path')
+        if listitem_path.startswith('plugin://'):
+            return True
+
+        # Method 3: Check if an addon ID is associated with the current item
+        addon_id = xbmc.getInfoLabel('ListItem.Property(Addon.ID)')
+        if addon_id:
+            return True
+
+        # Method 4: Check container path (for addon-generated content)
+        container_path = xbmc.getInfoLabel('Container.FolderPath')
+        if container_path.startswith('plugin://'):
+            return True
+
+        # Method 5: Improved HTTP detection with WebDAV exclusions (fallback only)
+        if (self.path or '').lower().startswith(('http://', 'https://')):
+            # Exclude known WebDAV/cloud storage patterns
+            webdav_patterns = [
+                    '/dav/',
+                    'webdav',
+                    '.nextcloud.',
+                    'owncloud',
+                    '/remote.php/',
+                    'dropbox',
+                    'googledrive',
+                    'onedrive'
+            ]
+
+            path_lower = self.path.lower()
+            if not any(pattern in path_lower for pattern in webdav_patterns):
+                # Additional check: look for typical addon URL structures
+                if any(indicator in path_lower for indicator in ['plugin', 'addon', 'stream']):
+                    return True
+
+        return False
 
     def update(self, new_details: dict) -> None:
         """
@@ -113,7 +160,7 @@ class Playback:
             self.source = "pvr_live"
         elif (self.path or '').lower().startswith('pvr://recordings/'):
             self.source = "pvr_recording"
-        elif (self.path or '').lower().startswith(('plugin://', 'http://', 'https://')):
+        elif self._is_addon_playback():
             self.source = "addon"
         else:
             Logger.info("Not from Kodi library, not PVR, not an http source - must be a non-library media file")
@@ -220,8 +267,9 @@ class Playback:
         #     list_item.setPath(f"plugin://plugin.switchback/?{args}")
         #     Logger.debug("Playback was PVR - override ListItem path to point to plugin proxy URL for PVR playback hack", list_item.getPath())
         #
-        #     # PVR channels are not really videos! See: https://forum.kodi.tv/showthread.php?tid=381623&pid=3232826#pid3232826
-        #     # So that's all we need to do for PVR playbacks
+
+        # PVR channels are not really videos! See: https://forum.kodi.tv/showthread.php?tid=381623&pid=3232826#pid3232826
+        # So that's all we need to do for PVR playbacks
 
         if self.source == "pvr_live":
             return list_item
@@ -243,6 +291,9 @@ class Playback:
                 'season':self.season,
                 'duration':int(self.totaltime) if self.totaltime is not None else None,
         }
+
+        Logger.debug("^^^ Setting infolabels with:", infolabels)
+
         tag.set_info(infolabels)
         # Required, otherwise immediate Switchback mode won't resume properly
         tag.set_resume_point({'position':float(self.resumetime or 0.0), 'total':float(self.totaltime or 0.0)})
