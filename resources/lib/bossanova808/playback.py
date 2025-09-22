@@ -34,7 +34,7 @@ class Playback:
     fanart: str | None = None
     poster: str | None = None
     year: int | None = None
-    showtitle: str |None = None
+    showtitle: str | None = None
     season: int | None = None
     episode: int | None = None
     resumetime: float | None = None
@@ -112,7 +112,8 @@ class Playback:
 
             if not any(pattern in path_lower for pattern in webdav_patterns):
                 # Additional check: look for typical addon URL structures
-                if any(indicator in path_lower for indicator in ['plugin', 'addon', 'stream']):
+                if any(indicator in path_lower for indicator in ('plugin', 'addon')):
+                    Logger.debug("Classified as addon via HTTP fallback heuristic", path_lower)
                     return True
 
         return False
@@ -135,7 +136,7 @@ class Playback:
 
         :return: the Playback object as JSON
         """
-        return json.dumps(asdict(self))
+        return json.dumps(asdict(self), ensure_ascii=False, indent=2)
 
     def update_playback_details_from_listitem(self, item: xbmcgui.ListItem) -> None:
         """
@@ -164,7 +165,7 @@ class Playback:
         elif self._is_addon_playback():
             self.source = "addon"
         else:
-            Logger.info("Not from Kodi library or PVR or addon – treating as a non-library media file")
+            Logger.info("Not from Kodi library, PVR, or addon - treating as a non-library media file")
             self.source = "file"
 
         # TITLE
@@ -270,7 +271,7 @@ class Playback:
 
         path = self.path
         list_item = xbmcgui.ListItem(label=self.pluginlabel, path=path, offscreen=offscreen)
-        art = {k:v for k, v in {"thumb":self.thumbnail, "poster":self.poster, "fanart":self.fanart}.items() if v}
+        art = {key: value for key, value in {"thumb": self.thumbnail, "poster": self.poster, "fanart": self.fanart}.items() if value}
         if art:
             list_item.setArt(art)
         list_item.setProperty('IsPlayable', 'true')
@@ -292,6 +293,10 @@ class Playback:
         # Otherwise, it's an episode/movie/file etc...set the InfoVideoTag stuff
         tag = ListItemInfoTag(list_item, "video")
         # Infotagger seems the best way to do this currently as is well tested
+        duration_seconds = (
+                int(self.duration) if self.duration is not None
+                else (int(self.totaltime) if self.totaltime is not None else None)
+        )
         # I found directly setting things on InfoVideoTag to be buggy/inconsistent
         infolabels = {
                 'mediatype':self.type,
@@ -304,10 +309,7 @@ class Playback:
                 'tvshowtitle':self.showtitle,
                 'episode':self.episode,
                 'season':self.season,
-                'duration': (
-                    int(self.duration) if self.duration is not None
-                    else (int(self.totaltime) if self.totaltime is not None else None)
-                ),
+                'duration': duration_seconds,
         }
 
         Logger.debug("^^^ Setting infolabels with:", infolabels)
@@ -386,7 +388,6 @@ class PlaybackList:
         import tempfile
         directory_name = os.path.dirname(self.file)
         temp_dir = None
-        directory_name = os.path.dirname(self.file)
         if directory_name:
             xbmcvfs.mkdirs(directory_name)
             temp_dir = directory_name
