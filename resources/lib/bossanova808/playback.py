@@ -1,7 +1,7 @@
 import os
 import json
-from dataclasses import dataclass
-from typing import List
+from dataclasses import dataclass, asdict
+from typing import List, Optional
 
 import xbmc
 import xbmcgui
@@ -18,31 +18,31 @@ class Playback:
     """
     Stores whatever data we can grab about a Kodi Playback so that we can display it nicely in the Switchback list
     """
-    file: str = None
-    path: str = None
-    type: str = None  # episode, movie, video (per Kodi types) - song is the other type, but Switchback supports video only
+    file: Optional[str] = None
+    path: Optional[str] = None
+    type: Optional[str] = None  # episode, movie, video (per Kodi types) - song is the other type, but Switchback supports video only
     # Seems to be a newer version of the above, but unclear how/when to use, and what about music??
-    # mediatype: str = None # mediatype: string - "video", "movie", "tvshow", "season", "episode" or "musicvideo"
-    source: str = None  # kodi_library, pvr_live, pvr_recording, addon, file
-    dbid: int = None
-    tvshowdbid: int = None
-    totalseasons: int = None
-    title: str = None
-    label: str = None
-    label2: str = None
-    thumbnail: str = None
-    fanart: str = None
-    poster: str = None
-    year: int = None
-    showtitle: str = None
-    season: int = None
-    episode: int = None
-    resumetime: float = None
-    totaltime: float = None
-    duration: float = None
-    channelname: str = None
-    channelnumberlabel: str = None
-    channelgroup: str = None
+    # mediatype: str | None = None # mediatype: string - "video", "movie", "tvshow", "season", "episode" or "musicvideo"
+    source: Optional[str] = None  # kodi_library, pvr_live, pvr_recording, addon, file
+    dbid: Optional[int] = None
+    tvshowdbid: Optional[int] = None
+    totalseasons: Optional[int] = None
+    title: Optional[str] = None
+    label: Optional[str] = None
+    label2: Optional[str] = None
+    thumbnail: Optional[str] = None
+    fanart: Optional[str] = None
+    poster: Optional[str] = None
+    year: Optional[int] = None
+    showtitle: Optional[str] = None
+    season: Optional[int] = None
+    episode: Optional[int] = None
+    resumetime: Optional[float] = None
+    totaltime: Optional[float] = None
+    duration: Optional[float] = None
+    channelname: Optional[str] = None
+    channelnumberlabel: Optional[str] = None
+    channelgroup: Optional[str] = None
 
     @property
     def pluginlabel(self) -> str:
@@ -69,6 +69,57 @@ class Playback:
             label = f"{label} (Addon)"
         return label
 
+    def _is_addon_playback(self) -> bool:
+        """
+        Determine if playback originates from an addon
+
+        :return: True if playback is from an addon, False otherwise
+        """
+        path_lower = (self.path or '').lower()
+
+        # Method 1: Check for plugin:// URLs (most reliable)
+        if path_lower.startswith('plugin://'):
+            return True
+
+        # Method 2: Check ListItem.Path infolabel for plugin URLs
+        listitem_path_lower = xbmc.getInfoLabel('ListItem.Path').lower()
+        if listitem_path_lower.startswith('plugin://'):
+            return True
+
+        # Method 3: Check if an addon ID is associated with the current item
+        addon_id = xbmc.getInfoLabel('ListItem.Property(Addon.ID)')
+        if addon_id:
+            return True
+
+        # Method 4: Check container path (for addon-generated content)
+        container_path_lower = xbmc.getInfoLabel('Container.FolderPath').lower()
+        if container_path_lower.startswith('plugin://'):
+            return True
+
+        # Method 5: Conservative HTTP fallback for local addon proxies only
+        if path_lower.startswith(('http://', 'https://')):
+            # Exclude known WebDAV/cloud storage patterns
+            webdav_patterns = [
+                '/dav/', 'webdav', '.nextcloud.', 'owncloud', '/remote.php/', 'dropbox', 'googledrive', 'onedrive'
+            ]
+
+            if not any(pattern in path_lower for pattern in webdav_patterns):
+                # Additional check: look for typical addon URL structures
+                if any(indicator in path_lower for indicator in ('plugin', 'addon')):
+                    Logger.debug("Classified as addon via HTTP fallback heuristic", path_lower)
+                    return True
+            # If we still have an Addon.ID or container is a plugin, treat as addon
+            addon_id_http = xbmc.getInfoLabel('ListItem.Property(Addon.ID)')
+            container_path_lower_http = xbmc.getInfoLabel('Container.FolderPath').lower()
+            if addon_id_http or container_path_lower_http.startswith('plugin://'):
+                return True
+            # Accept loopback hosts commonly used by addon proxy/resolvers
+            if any(host in path_lower for host in ('127.0.0.1', 'localhost', '[::1]')):
+                Logger.debug("Classified as addon via localhost HTTP fallback", path_lower)
+                return True
+
+        return False
+
     def update(self, new_details: dict) -> None:
         """
         Update a Playback object with new details
@@ -87,7 +138,7 @@ class Playback:
 
         :return: the Playback object as JSON
         """
-        return json.dumps(self, default=lambda o:o.__dict__)
+        return json.dumps(asdict(self), ensure_ascii=False, indent=2)
 
     def update_playback_details_from_listitem(self, item: xbmcgui.ListItem) -> None:
         """
@@ -113,10 +164,10 @@ class Playback:
             self.source = "pvr_live"
         elif (self.path or '').lower().startswith('pvr://recordings/'):
             self.source = "pvr_recording"
-        elif (self.path or '').lower().startswith(('plugin://', 'http://', 'https://')):
+        elif self._is_addon_playback():
             self.source = "addon"
         else:
-            Logger.info("Not from Kodi library, not PVR, not an http source - must be a non-library media file")
+            Logger.debug("Not from Kodi library, PVR, or addon - treating as a non-library media file")
             self.source = "file"
 
         # TITLE
@@ -129,7 +180,12 @@ class Playback:
         # Infotagger/Kodi expect mediatype in {"video","movie","tvshow","season","episode","musicvideo"}.
         if xbmc.getInfoLabel('VideoPlayer.TVShowTitle'):
             self.type = "episode"
-            self.tvshowdbid = int(xbmc.getInfoLabel('VideoPlayer.TvShowDBID')) if xbmc.getInfoLabel('VideoPlayer.TvShowDBID') else None
+            tvshowdbid_label = xbmc.getInfoLabel('VideoPlayer.TvShowDBID')
+            try:
+                self.tvshowdbid = int(tvshowdbid_label) if tvshowdbid_label else None
+            except ValueError:
+                self.tvshowdbid = None
+
         elif self.dbid:
             self.type = "movie"
         elif xbmc.getInfoLabel('VideoPlayer.ChannelName'):
@@ -162,11 +218,23 @@ class Playback:
         self.channelnumberlabel = xbmc.getInfoLabel('VideoPlayer.ChannelNumberLabel')
         self.channelgroup = xbmc.getInfoLabel('VideoPlayer.ChannelGroup')
         # Episodes & Movies
-        self.year = int(xbmc.getInfoLabel('VideoPlayer.Year')) if xbmc.getInfoLabel('VideoPlayer.Year') else None
+        year_label = xbmc.getInfoLabel('VideoPlayer.Year')
+        try:
+            self.year = int(year_label) if year_label else None
+        except ValueError:
+            self.year = None
         # Episodes
         self.showtitle = xbmc.getInfoLabel('VideoPlayer.TVShowTitle')
-        self.season = int(xbmc.getInfoLabel('VideoPlayer.Season')) if xbmc.getInfoLabel('VideoPlayer.Season') else None
-        self.episode = int(xbmc.getInfoLabel('VideoPlayer.Episode')) if xbmc.getInfoLabel('VideoPlayer.Episode') else None
+        season_label = xbmc.getInfoLabel('VideoPlayer.Season')
+        episode_label = xbmc.getInfoLabel('VideoPlayer.Episode')
+        try:
+            self.season = int(season_label) if season_label else None
+        except ValueError:
+            self.season = None
+        try:
+            self.episode = int(episode_label) if episode_label else None
+        except ValueError:
+            self.episode = None
         # Episodes -> we also want the number of seasons so we can force-browse to the appropriate spot after a Swtichback initiated playback
         if self.tvshowdbid:
             json_dict = {
@@ -210,7 +278,9 @@ class Playback:
 
         path = self.path
         list_item = xbmcgui.ListItem(label=self.pluginlabel, path=path, offscreen=offscreen)
-        list_item.setArt({"thumb":self.thumbnail, "poster":self.poster, "fanart":self.fanart})
+        art = {key: value for key, value in {"thumb": self.thumbnail, "poster": self.poster, "fanart": self.fanart}.items() if value}
+        if art:
+            list_item.setArt(art)
         list_item.setProperty('IsPlayable', 'true')
 
         # if "pvr" in self.source:
@@ -220,8 +290,9 @@ class Playback:
         #     list_item.setPath(f"plugin://plugin.switchback/?{args}")
         #     Logger.debug("Playback was PVR - override ListItem path to point to plugin proxy URL for PVR playback hack", list_item.getPath())
         #
-        #     # PVR channels are not really videos! See: https://forum.kodi.tv/showthread.php?tid=381623&pid=3232826#pid3232826
-        #     # So that's all we need to do for PVR playbacks
+
+        # PVR channels are not really videos! See: https://forum.kodi.tv/showthread.php?tid=381623&pid=3232826#pid3232826
+        # So that's all we need to do for PVR playbacks
 
         if self.source == "pvr_live":
             return list_item
@@ -229,6 +300,12 @@ class Playback:
         # Otherwise, it's an episode/movie/file etc...set the InfoVideoTag stuff
         tag = ListItemInfoTag(list_item, "video")
         # Infotagger seems the best way to do this currently as is well tested
+        duration_seconds = None
+        if self.duration is not None:
+            duration_seconds = max(0, int(round(self.duration)))
+        elif self.totaltime is not None:
+            duration_seconds = max(0, int(round(self.totaltime)))
+
         # I found directly setting things on InfoVideoTag to be buggy/inconsistent
         infolabels = {
                 'mediatype':self.type,
@@ -241,11 +318,17 @@ class Playback:
                 'tvshowtitle':self.showtitle,
                 'episode':self.episode,
                 'season':self.season,
-                'duration':int(self.totaltime) if self.totaltime is not None else None,
         }
+        if duration_seconds is not None:
+            infolabels['duration'] = duration_seconds
+
+
+        Logger.debug("^^^ Setting infolabels with:", infolabels)
+
         tag.set_info(infolabels)
         # Required, otherwise immediate Switchback mode won't resume properly
-        tag.set_resume_point({'position':float(self.resumetime or 0.0), 'total':float(self.totaltime or 0.0)})
+        # These keys are correct, even if CodeRabbit says they are not - see https://github.com/jurialmunkey/script.module.infotagger/blob/f138c1dd7201a8aff7541292fbfc61ed7b3a9aa1/resources/modules/infotagger/listitem.py#L204
+        tag.set_resume_point({'ResumeTime':float(self.resumetime or 0.0), 'TotalTime':float(self.totaltime or 0.0)})
         if self.tvshowdbid:
             list_item.setProperty('tvshowdbid', str(self.tvshowdbid))
 
@@ -315,9 +398,10 @@ class PlaybackList:
         Logger.info(f"Saving PlaybackList to file: {self.file}")
         import tempfile
         directory_name = os.path.dirname(self.file)
+        temp_dir = None
         if directory_name:
             xbmcvfs.mkdirs(directory_name)
-            temp_dir = directory_name or None
+            temp_dir = directory_name
         with tempfile.NamedTemporaryFile('w', delete=False, encoding='utf-8', dir=temp_dir) as temp_file:
             temp_file.write(self.toJson())
             temporary_name = temp_file.name
@@ -337,7 +421,7 @@ class PlaybackList:
         """
         self.list = [x for x in self.list if x.path != path]
 
-    def find_playback_by_path(self, path: str) -> Playback | None:
+    def find_playback_by_path(self, path: str) -> Optional[Playback]:
         """
         Return a playback with the matching path if found, otherwise None
 
