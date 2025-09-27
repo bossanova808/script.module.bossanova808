@@ -1,6 +1,7 @@
 # noinspection PyUnresolvedReferences
 import xbmcgui
-from bossanova808.constants import *
+# noinspection PyPackages
+from .constants import ADDON_NAME
 
 
 class Notify:

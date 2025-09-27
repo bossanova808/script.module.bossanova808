@@ -23,10 +23,12 @@ from contextlib import contextmanager
 from platform import uname
 from pprint import pformat
 from typing import Text, Callable, Generator
+import sys
+
 # noinspection PyUnresolvedReferences
 import xbmc
-from bossanova808.constants import *
-from bossanova808.logger import Logger
+# noinspection PyPackages
+from .logger import Logger
 
 
 def _format_vars(variables):

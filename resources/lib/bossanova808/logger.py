@@ -1,8 +1,11 @@
 from pprint import pprint, pformat
-# noinspection PyUnresolvedReferences
+import sys
+
 import xbmc
-from bossanova808.constants import *
+
 from typing import Any
+# noinspection PyPackages
+from .constants import ADDON_NAME, ADDON_VERSION, KODI_VERSION, KODI_MAJOR_VERSION, ADDON_ARGUMENTS
 
 
 class Logger:
