@@ -159,16 +159,19 @@ class Playback:
         """
         return json.dumps(asdict(self), ensure_ascii=False, indent=2)
 
-    def update_playback_details(self, item: xbmcgui.ListItem) -> None:
+    def update_playback_details(self, file: str, item: xbmcgui.ListItem) -> None:
         """
         Update the Playback object with details from a playing Kodi ListItem object and InfoLabels
 
-        :param item: the current Kodi playing item
+        :param file: the current file Kodi is playing (from xbmc.Player().getPlayingFile())
+        :param item: the current Kodi playing item (from xbmc.Player().getPlayingItem())
         """
 
         self.path = item.getPath()
+        self.file = file
         self.label = item.getLabel()
         self.label2 = item.getLabel2()
+
         # Updated as playback progresses (see switchback_service.py), but initialise here in cast of early exits etc.
         if self.source != "pvr_live":
             # Getting from the player directly is more reliable than using item.getVideoInfoTag() etc
