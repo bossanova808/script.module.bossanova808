@@ -69,7 +69,7 @@ class Playback:
                 label = f"{label} (PVR Recording {self.channelname})"
 
         if self.source == "addon":
-            label = f"{label} (Addon)"
+            label = f"{label} (* Add-on)"
         return label
 
     @property
