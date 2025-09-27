@@ -7,8 +7,10 @@ import xml.etree.ElementTree as ElementTree
 from urllib.parse import unquote
 from typing import Any
 
-from bossanova808.constants import ADDON
-from bossanova808.logger import Logger
+# noinspection PyPackages
+from .constants import ADDON
+# noinspection PyPackages
+from .logger import Logger
 
 
 def set_property(window: xbmcgui.Window, name: str, value: str | None = None) -> None:

@@ -7,9 +7,11 @@ import xbmc
 import xbmcgui
 import xbmcvfs
 
-from bossanova808.utilities import clean_art_url, send_kodi_json
-from bossanova808.logger import Logger
-
+# noinspection PyPackages
+from .utilities import clean_art_url, send_kodi_json
+# noinspection PyPackages
+from .logger import Logger
+# noinspection PyUnresolvedReferences
 from infotagger.listitem import ListItemInfoTag
 
 
@@ -33,13 +35,14 @@ class Playback:
     thumbnail: Optional[str] = None
     fanart: Optional[str] = None
     poster: Optional[str] = None
+    icon: Optional[str] = None
     year: Optional[int] = None
     showtitle: Optional[str] = None
     season: Optional[int] = None
     episode: Optional[int] = None
-    resumetime: Optional[float] = None
-    totaltime: Optional[float] = None
-    duration: Optional[float] = None
+    resumetime: Optional[int] = None
+    totaltime: Optional[int] = None
+    duration: Optional[int] = None
     channelname: Optional[str] = None
     channelnumberlabel: Optional[str] = None
     channelgroup: Optional[str] = None
@@ -66,7 +69,23 @@ class Playback:
                 label = f"{label} (PVR Recording {self.channelname})"
 
         if self.source == "addon":
-            label = f"{label} (Addon)"
+            label = f"{label} (* Add-on)"
+        return label
+
+    @property
+    def pluginlabel_short(self) -> str:
+        """
+        Create a shorter label, e.g. Showname (2x03)
+        """
+        label = self.title or self.label or self.channelname or (os.path.basename(self.path) if self.path else None) or "Unknown"
+        if self.showtitle:
+            if (self.season is not None and self.season >= 0) and (self.episode is not None and self.episode >= 0):
+                label = f"{self.showtitle} ({self.season}x{self.episode:02d})"
+            elif self.season is not None and self.season >= 0:
+                label = f"{self.showtitle} ({self.season}x?)"
+            else:
+                label = f"{self.showtitle}"
+
         return label
 
     def _is_addon_playback(self) -> bool:
@@ -100,7 +119,7 @@ class Playback:
         if path_lower.startswith(('http://', 'https://')):
             # Exclude known WebDAV/cloud storage patterns
             webdav_patterns = [
-                '/dav/', 'webdav', '.nextcloud.', 'owncloud', '/remote.php/', 'dropbox', 'googledrive', 'onedrive'
+                    '/dav/', 'webdav', '.nextcloud.', 'owncloud', '/remote.php/', 'dropbox', 'googledrive', 'onedrive',
             ]
 
             if not any(pattern in path_lower for pattern in webdav_patterns):
@@ -140,18 +159,26 @@ class Playback:
         """
         return json.dumps(asdict(self), ensure_ascii=False, indent=2)
 
-    def update_playback_details_from_listitem(self, item: xbmcgui.ListItem) -> None:
+    def update_playback_details(self, file: str, item: xbmcgui.ListItem) -> None:
         """
         Update the Playback object with details from a playing Kodi ListItem object and InfoLabels
 
-        :param item: the current Kodi playing item
+        :param file: the current file Kodi is playing (from xbmc.Player().getPlayingFile())
+        :param item: the current Kodi playing item (from xbmc.Player().getPlayingItem())
         """
 
         self.path = item.getPath()
+        self.file = file
         self.label = item.getLabel()
         self.label2 = item.getLabel2()
 
-        # SOURCE - Kodi Library (...get DBID), PVR, or Non-Library Media?
+        # Updated as playback progresses (see switchback_service.py), but initialise here in cast of early exits etc.
+        if self.source != "pvr_live":
+            # Getting from the player directly is more reliable than using item.getVideoInfoTag() etc
+            self.totaltime = self.duration = int(xbmc.Player().getTotalTime())
+            self.resumetime = int(xbmc.Player().getTime())
+
+        # Determine the Playback source - Kodi Library (...get DBID), PVR, Addon, or Non-Library file?
         dbid_label = xbmc.getInfoLabel('VideoPlayer.DBID')
         try:
             self.dbid = int(dbid_label) if dbid_label else None
@@ -193,24 +220,13 @@ class Playback:
         else:
             self.type = "video"
 
-        # Initialise RESUME TIME and TOTAL TIME / DURATION
-        if self.source != "pvr_live":
-            video_tag = item.getVideoInfoTag()
-            if video_tag:
-                total = video_tag.getResumeTimeTotal()
-                self.totaltime = self.duration = (None if total == 0.0 else total)
-                # This will get updated as playback progresses (see switchback_service.py), but might as well initialise here
-                resume = video_tag.getResumeTime()
-                self.resumetime = (None if resume == 0.0 else resume)
-            else:
-                self.totaltime = self.duration = None
-                self.resumetime = None
-
-        # ARTWORK - POSTER, FANART and THUMBNAIL
+        # ARTWORK - POSTER, FANART THUMBNAIL and ICON
         self.poster = clean_art_url(xbmc.getInfoLabel('Player.Art(tvshow.poster)') or xbmc.getInfoLabel('Player.Art(poster)') or xbmc.getInfoLabel('Player.Art(thumb)'))
         self.fanart = clean_art_url(xbmc.getInfoLabel('Player.Art(fanart)'))
-        thumbnail_value = xbmc.getInfoLabel('Player.Art(thumb)') or (item.getArt('thumb') or '')
-        self.thumbnail = clean_art_url(thumbnail_value)
+        thumbnail = xbmc.getInfoLabel('Player.Art(thumb)') or (item.getArt('thumb') or '')
+        self.thumbnail = clean_art_url(thumbnail)
+        icon = xbmc.getInfoLabel('Player.Art(icon)') or (item.getArt('icon') or '')
+        self.icon = clean_art_url(icon)
 
         # OTHER DETAILS
         # PVR Live/Recordings
@@ -266,66 +282,49 @@ class Playback:
                 self.totalseasons = len(properties['seasons'])
 
     # noinspection PyMethodMayBeStatic
-    def create_list_item_from_playback(self, offscreen: bool = False) -> xbmcgui.ListItem:
+    def create_list_item_from_playback(self) -> xbmcgui.ListItem:
         """
         Create a Kodi ListItem object from a Playback object
 
-        :param offscreen: whether to create the list item in offscreen mode (faster) - default False
         :return: ListItem: a Kodi ListItem object constructed from the Playback object
         """
 
         Logger.debug("Creating list item from playback:", self)
 
-        path = self.path
-        list_item = xbmcgui.ListItem(label=self.pluginlabel, path=path, offscreen=offscreen)
-        art = {key: value for key, value in {"thumb": self.thumbnail, "poster": self.poster, "fanart": self.fanart}.items() if value}
+        list_item = xbmcgui.ListItem(label=self.pluginlabel, path=self.file if self.source not in ["addon", "pvr_live"] else self.path)
+        art = {key:value for key, value in {"thumb":self.thumbnail, "poster":self.poster, "fanart":self.fanart, "icon":self.icon}.items() if value}
         if art:
             list_item.setArt(art)
         list_item.setProperty('IsPlayable', 'true')
 
-        # if "pvr" in self.source:
-        #     # use a proxy plugin url to actually trigger resuming live PVR playback...
-        #     # (TODO: remove this hack when setResolvedUrl/ListItems are fixed to properly handle PVR links in listitem.path)
-        #     args = urlencode({'mode': 'pvr_hack', 'path': self.path})
-        #     list_item.setPath(f"plugin://plugin.switchback/?{args}")
-        #     Logger.debug("Playback was PVR - override ListItem path to point to plugin proxy URL for PVR playback hack", list_item.getPath())
-        #
-
         # PVR channels are not really videos! See: https://forum.kodi.tv/showthread.php?tid=381623&pid=3232826#pid3232826
         # So that's all we need to do for PVR playbacks
-
         if self.source == "pvr_live":
             return list_item
 
         # Otherwise, it's an episode/movie/file etc...set the InfoVideoTag stuff
         tag = ListItemInfoTag(list_item, "video")
-        # Infotagger seems the best way to do this currently as is well tested
         duration_seconds = None
         if self.duration is not None:
-            duration_seconds = max(0, int(round(self.duration)))
+            duration_seconds = self.duration
         elif self.totaltime is not None:
-            duration_seconds = max(0, int(round(self.totaltime)))
+            duration_seconds = self.totaltime
 
+        # Infotagger seems the best way to do this currently as is well tested
         # I found directly setting things on InfoVideoTag to be buggy/inconsistent
         infolabels = {
                 'mediatype':self.type,
-                'dbid':self.dbid,  # previously had: if self.type != 'episode' else self.tvshowdbid,
-                # InfoTagger throws a Key Error on this?
-                # 'tvshowdbid': self.tvshowdbid or None,
+                'dbid':self.dbid,
                 'title':self.title,
                 'path':self.path,
                 'year':self.year,
                 'tvshowtitle':self.showtitle,
                 'episode':self.episode,
                 'season':self.season,
+                'duration':duration_seconds,
         }
-        if duration_seconds is not None:
-            infolabels['duration'] = duration_seconds
-
-
-        Logger.debug("^^^ Setting infolabels with:", infolabels)
-
         tag.set_info(infolabels)
+
         # Required, otherwise immediate Switchback mode won't resume properly
         # These keys are correct, even if CodeRabbit says they are not - see https://github.com/jurialmunkey/script.module.infotagger/blob/f138c1dd7201a8aff7541292fbfc61ed7b3a9aa1/resources/modules/infotagger/listitem.py#L204
         tag.set_resume_point({'ResumeTime':float(self.resumetime or 0.0), 'TotalTime':float(self.totaltime or 0.0)})
@@ -388,8 +387,7 @@ class PlaybackList:
             Logger.error(f"JSONDecodeError - Unable to parse PlaybackList file [{self.file}] -  creating empty PlaybackList & file")
             self.init()
         # Let unexpected exceptions propagate
-
-        Logger.info("PlaybackList is:", self.list)
+        # Logger.info("PlaybackList is:", self.list)
 
     def save_to_file(self) -> None:
         """
@@ -431,5 +429,7 @@ class PlaybackList:
         Logger.debug(f"find_playback_by_path: {path}")
         for playback in self.list:
             if playback.path == path:
+                Logger.debug(f"Matched playback to [{playback.path}]")
                 return playback
+        Logger.debug(f"No matching playback for [{path}]")
         return None
