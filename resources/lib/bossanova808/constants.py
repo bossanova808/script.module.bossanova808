@@ -20,6 +20,7 @@ TRANSLATE = LANGUAGE = ADDON.getLocalizedString
 LOG_PATH = xbmcvfs.translatePath('special://logpath')
 KODI_VERSION = xbmc.getInfoLabel('System.BuildVersion')
 # Parse System.BuildVersion (e.g. "21.0", "21.0-Beta1", "21.0 (20.90.801)") if possible, otherwise default to 21 (Omega)
+# (Have never seen the parsing fail - in practice, the fallback to 21 only happens when unit testing modules outside of Kodi)
 version_label = KODI_VERSION or ''
 version_match = re.search(r'\d+', version_label)
 KODI_MAJOR_VERSION = int(version_match.group(0)) if version_match else 21
