@@ -1,6 +1,5 @@
-v 1.0.1
-- Updates for Piers and following CodeRabbit reviews
-- Move Playback here, initially used by Switchback, later will be used by e.g. Playback resumer
+v1.0.1
+- Updates for Piers and some defensive programming
 
 v1.0.0 
 - Initial release

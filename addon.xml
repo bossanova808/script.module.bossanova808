@@ -10,8 +10,8 @@
         <license>GPL-3.0-only</license>
         <website>https://github.com/bossanova808/script.module.bossanova808</website>
         <source>https://github.com/bossanova808/script.module.bossanova808</source>
-        <news>v 1.0.1
-- Updates for Piers and following CodeRabbit reviews</news>
+        <news>v1.0.1
+- Updates for Piers and some defensive programming</news>
         <assets>
             <icon>resources/icon.png</icon>
         </assets>
