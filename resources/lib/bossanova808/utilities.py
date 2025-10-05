@@ -2,6 +2,7 @@ from __future__ import annotations
 import json
 import re
 import xbmc
+import xbmcaddon
 import xbmcgui
 import xbmcvfs
 import xml.etree.ElementTree as ElementTree
@@ -215,6 +216,22 @@ def is_playback_paused() -> bool:
     :return: Boolean indicating the player paused state
     """
     return bool(xbmc.getCondVisibility("Player.Paused"))
+
+
+def get_addon_version(addon_id) -> str | None:
+    """
+    Helper function to return the currently installed version of Kodi addon by its ID.
+
+    :param addon_id: the ID of the addon, e.g. weather.ozweather
+    :return: the version string (e.g. "0.0.1"), or None if the addon is not installed and enabled
+    """
+    try:
+        addon = xbmcaddon.Addon(id=addon_id)
+        version = addon.getAddonInfo('version')
+        return version
+    except Exception as e:
+        Logger.error(f"Error getting version for {addon_id}")
+        Logger.error(e)
 
 
 def footprints(startup: bool = True) -> None:
