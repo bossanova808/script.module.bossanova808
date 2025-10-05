@@ -228,11 +228,12 @@ def get_addon_version(addon_id: str) -> str | None:
     try:
         addon = xbmcaddon.Addon(id=addon_id)
         version = addon.getAddonInfo('version')
-        return version
     except RuntimeError as e:
         Logger.error(f"Error getting version for {addon_id}")
         Logger.error(e)
         return None
+
+    return version
 
 
 def footprints(startup: bool = True) -> None:
