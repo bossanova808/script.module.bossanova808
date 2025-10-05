@@ -218,7 +218,7 @@ def is_playback_paused() -> bool:
     return bool(xbmc.getCondVisibility("Player.Paused"))
 
 
-def get_addon_version(addon_id) -> str | None:
+def get_addon_version(addon_id: str) -> str | None:
     """
     Helper function to return the currently installed version of Kodi addon by its ID.
 
@@ -229,9 +229,10 @@ def get_addon_version(addon_id) -> str | None:
         addon = xbmcaddon.Addon(id=addon_id)
         version = addon.getAddonInfo('version')
         return version
-    except Exception as e:
+    except RuntimeError as e:
         Logger.error(f"Error getting version for {addon_id}")
         Logger.error(e)
+        return None
 
 
 def footprints(startup: bool = True) -> None:
