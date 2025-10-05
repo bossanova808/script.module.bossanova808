@@ -1,3 +1,4 @@
+from __future__ import annotations
 import json
 import re
 import xbmc
@@ -7,8 +8,10 @@ import xml.etree.ElementTree as ElementTree
 from urllib.parse import unquote
 from typing import Any
 
+
+# (TODO - once OzWeather 2.1.6 and matching Skin Patcher are released, the WEATHER_WINDOW just below can be removed again...)
 # noinspection PyPackages
-from .constants import ADDON
+from .constants import ADDON, WEATHER_WINDOW
 # noinspection PyPackages
 from .logger import Logger
 

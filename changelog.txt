@@ -1,3 +1,6 @@
+v1.0.2
+- Fix for previous, for systems using older Python
+
 v1.0.1
 - Updates for Piers and some defensive programming
 
