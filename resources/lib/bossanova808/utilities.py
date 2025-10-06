@@ -10,8 +10,8 @@ from urllib.parse import unquote
 from typing import Any
 
 
-# (TODO - once OzWeather 2.1.6 and matching Skin Patcher are released, the WEATHER_WINDOW just below can be removed again...)
-# noinspection PyPackages
+# (TODO - once OzWeather 2.1.6 and all the other addons updates are released, the * here can just be ADDON again, sigh)
+# noinspection PyPackages,PyUnusedImports
 from .constants import *
 # noinspection PyPackages
 from .logger import Logger
@@ -234,6 +234,17 @@ def get_addon_version(addon_id: str) -> str | None:
         return None
 
     return version
+
+
+def version_tuple(version_str: str) -> tuple:
+    """
+    Helper function to return a version tuple from a version string "2.1.5" -> (2, 1 , 5)
+    Useful for comparisons, e.g. if version_tuple(version) <= version_tuple('2.1.5')
+
+    :param version_str: the addon version string
+    :return: version in tuple form (1, 2, 3)
+    """
+    return tuple(map(int, version_str.split('.')))
 
 
 def get_resume_point(library_type: str, dbid: int) -> float | None:
