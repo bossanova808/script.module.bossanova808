@@ -11,7 +11,9 @@
         <website>https://github.com/bossanova808/script.module.bossanova808</website>
         <source>https://github.com/bossanova808/script.module.bossanova808</source>
         <news>v1.0.2
-- Fix for previous, for systems using older Python</news>
+- Fix for previous, for systems using older Python
+- Add some more helper functions
+</news>
         <assets>
             <icon>resources/icon.png</icon>
         </assets>
