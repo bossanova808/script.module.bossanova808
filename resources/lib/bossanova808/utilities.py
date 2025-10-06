@@ -236,6 +236,94 @@ def get_addon_version(addon_id: str) -> str | None:
     return version
 
 
+def get_resume_point(library_type: str, dbid: int) -> float | None:
+    """
+    Get the resume point from the Kodi library for a given Kodi DB item
+
+    :param library_type: one of 'episode', 'movie' or 'musicvideo'
+    :param dbid: the Kodi DB item ID
+    :return: the resume point, or None if there isn't one set
+    """
+
+    get_method, id_name, result_key = _get_jsonrpc_video_lib_params(library_type)
+
+    # Short circuit if there is an issue get the JSON RPC method etc.
+    if not get_method:
+        return None
+
+    json_dict = {
+            "jsonrpc":"2.0",
+            "id":"getResumePoint",
+            "method":get_method,
+            "params":{
+                    id_name:dbid,
+                    "properties":["resume"],
+            }
+    }
+
+    query = json.dumps(json_dict)
+    json_response = send_kodi_json(f'Get resume point for {library_type} with dbid: {dbid}', query)
+    result = json_response.get('result')
+    if result:
+        try:
+            resume_point = result[result_key]['resume']['position']
+        except (KeyError, TypeError) as e:
+            Logger.error(f"Could not get resume point")
+            Logger.error(e)
+            resume_point = None
+    else:
+        Logger.error("No result returned from JSON-RPC query")
+        resume_point = None
+
+    Logger.info(f"Resume point retrieved: {resume_point}")
+
+    return resume_point if resume_point else None
+
+
+def get_playcount(library_type: str, dbid: int):
+    """
+    Get the playcount for the given Kodi DB item
+
+    :param library_type: one of 'episode', 'movie' or 'musicvideo'
+    :param dbid: the Kodi DB item ID
+    :return: the playcount if there is one, or None
+    """
+
+    get_method, id_name, result_key = _get_jsonrpc_video_lib_params(library_type)
+
+    # Short circuit if there is an issue get the JSON RPC method etc.
+    if not get_method:
+        return None
+
+    json_dict = {
+            "jsonrpc":"2.0",
+            "id":"getPlayCount",
+            "method":get_method,
+            "params":{
+                    id_name:dbid,
+                    "properties":["playcount"],
+            }
+    }
+
+    query = json.dumps(json_dict)
+    json_response = send_kodi_json(f'Get playcount for {library_type} with dbid: {dbid}', query)
+    result = json_response.get('result')
+    if result:
+        try:
+            play_count = result[result_key]['playcount']
+        except (KeyError, TypeError) as e:
+            Logger.error(f"Could not get playcount")
+            Logger.error(e)
+            play_count = None
+    else:
+        Logger.error("No result returned from JSON-RPC query")
+        play_count = None
+
+    Logger.info(f"Playcount retrieved: {play_count}")
+
+    return play_count if play_count else None
+
+
 def footprints(startup: bool = True) -> None:
     """
     TODO - this has moved to Logger - update all addons to use Logger.start/.stop directly, then ultimately remove this!
@@ -247,3 +335,30 @@ def footprints(startup: bool = True) -> None:
         Logger.start()
     else:
         Logger.stop()
+
+
+def _get_jsonrpc_video_lib_params(library_type: str):
+    """
+    Given a Kodi library type, return the JSON RPC library parameters needed to get details
+
+    :param library_type: one of 'episode', 'movie' or 'musicvideo'
+    :return:  method for getting details, the name of the id, and the key for the results returned
+    """
+
+    if library_type == 'episode':
+        get_method = 'VideoLibrary.GetEpisodeDetails'
+        id_name = 'episodeid'
+        result_key = 'episodedetails'
+    elif library_type == 'movie':
+        get_method = 'VideoLibrary.GetMovieDetails'
+        id_name = 'movieid'
+        result_key = 'moviedetails'
+    elif library_type == 'musicvideo':
+        get_method = 'VideoLibrary.GetMusicVideoDetails'
+        id_name = 'musicvideoid'
+        result_key = 'musicvideodetails'
+    else:
+        Logger.error(f"Unsupported library type: {library_type}")
+        return None
+
+    return get_method, id_name, result_key
