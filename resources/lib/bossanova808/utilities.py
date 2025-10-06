@@ -272,7 +272,7 @@ def get_resume_point(library_type: str, dbid: int) -> float | None:
         try:
             resume_point = result[result_key]['resume']['position']
         except (KeyError, TypeError) as e:
-            Logger.error(f"Could not get resume point")
+            Logger.error("Could not get resume point")
             Logger.error(e)
             resume_point = None
     else:
@@ -281,10 +281,10 @@ def get_resume_point(library_type: str, dbid: int) -> float | None:
 
     Logger.info(f"Resume point retrieved: {resume_point}")
 
-    return resume_point if resume_point is not None else None
+    return resume_point
 
 
-def get_playcount(library_type: str, dbid: int):
+def get_playcount(library_type: str, dbid: int) -> int | None:
     """
     Get the playcount for the given Kodi DB item
 
@@ -298,10 +298,6 @@ def get_playcount(library_type: str, dbid: int):
     if not params:
         return None
     get_method, id_name, result_key = params
-
-    # Short circuit if there is an issue get the JSON RPC method etc.
-    if not get_method:
-        return None
 
     json_dict = {
             "jsonrpc":"2.0",
@@ -324,7 +320,7 @@ def get_playcount(library_type: str, dbid: int):
         try:
             play_count = result[result_key]['playcount']
         except (KeyError, TypeError) as e:
-            Logger.error(f"Could not get playcount")
+            Logger.error("Could not get playcount")
             Logger.error(e)
             play_count = None
     else:
@@ -333,7 +329,7 @@ def get_playcount(library_type: str, dbid: int):
 
     Logger.info(f"Playcount retrieved: {play_count}")
 
-    return play_count if play_count is not None else None
+    return play_count
 
 
 def footprints(startup: bool = True) -> None:
@@ -349,7 +345,7 @@ def footprints(startup: bool = True) -> None:
         Logger.stop()
 
 
-def _get_jsonrpc_video_lib_params(library_type: str):
+def _get_jsonrpc_video_lib_params(library_type: str) -> tuple[str, str, str] | None:
     """
     Given a Kodi library type, return the JSON RPC library parameters needed to get details
 
