@@ -245,11 +245,11 @@ def get_resume_point(library_type: str, dbid: int) -> float | None:
     :return: the resume point, or None if there isn't one set
     """
 
-    get_method, id_name, result_key = _get_jsonrpc_video_lib_params(library_type)
-
+    params = _get_jsonrpc_video_lib_params(library_type)
     # Short circuit if there is an issue get the JSON RPC method etc.
-    if not get_method:
+    if not params:
         return None
+    get_method, id_name, result_key = params
 
     json_dict = {
             "jsonrpc":"2.0",
@@ -263,6 +263,10 @@ def get_resume_point(library_type: str, dbid: int) -> float | None:
 
     query = json.dumps(json_dict)
     json_response = send_kodi_json(f'Get resume point for {library_type} with dbid: {dbid}', query)
+    if not json_response:
+        Logger.error("Nothing returned from JSON-RPC query")
+        return None
+
     result = json_response.get('result')
     if result:
         try:
@@ -277,7 +281,7 @@ def get_resume_point(library_type: str, dbid: int) -> float | None:
 
     Logger.info(f"Resume point retrieved: {resume_point}")
 
-    return resume_point if resume_point else None
+    return resume_point if resume_point is not None else None
 
 
 def get_playcount(library_type: str, dbid: int):
@@ -289,7 +293,11 @@ def get_playcount(library_type: str, dbid: int):
     :return: the playcount if there is one, or None
     """
 
-    get_method, id_name, result_key = _get_jsonrpc_video_lib_params(library_type)
+    params = _get_jsonrpc_video_lib_params(library_type)
+    # Short circuit if there is an issue get the JSON RPC method etc.
+    if not params:
+        return None
+    get_method, id_name, result_key = params
 
     # Short circuit if there is an issue get the JSON RPC method etc.
     if not get_method:
@@ -307,6 +315,10 @@ def get_playcount(library_type: str, dbid: int):
 
     query = json.dumps(json_dict)
     json_response = send_kodi_json(f'Get playcount for {library_type} with dbid: {dbid}', query)
+    if not json_response:
+        Logger.error("Nothing returned from JSON-RPC query")
+        return None
+
     result = json_response.get('result')
     if result:
         try:
@@ -321,7 +333,7 @@ def get_playcount(library_type: str, dbid: int):
 
     Logger.info(f"Playcount retrieved: {play_count}")
 
-    return play_count if play_count else None
+    return play_count if play_count is not None else None
 
 
 def footprints(startup: bool = True) -> None:
