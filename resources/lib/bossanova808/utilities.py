@@ -12,7 +12,7 @@ from typing import Any
 
 # (TODO - once OzWeather 2.1.6 and matching Skin Patcher are released, the WEATHER_WINDOW just below can be removed again...)
 # noinspection PyPackages
-from .constants import ADDON, WEATHER_WINDOW
+from .constants import *
 # noinspection PyPackages
 from .logger import Logger
 
