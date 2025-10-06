@@ -159,8 +159,8 @@ def get_advancedsetting(setting_path: str) -> str | None:
     """
     Helper function to extract a setting from Kodi's advancedsettings.xml file,
     Remember: cast the result appropriately and provide the Kodi default value as a fallback if the setting is not found.
-    E.g.::
-        Store.ignore_seconds_at_start = int(get_advancedsetting('./video/ignoresecondsatstart')) or 180
+    E.g.:
+        Store.ignore_seconds_at_start = int(get_advancedsetting('video/ignoresecondsatstart')) or 180
 
     :param setting_path: The advanced setting, in 'section/setting' (i.e. path) form, to look for (e.g. video/ignoresecondsatstart)
     :return: The setting value if found, None if not found/advancedsettings.xml doesn't exist
