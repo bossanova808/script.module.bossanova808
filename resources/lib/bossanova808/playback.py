@@ -1,6 +1,7 @@
 import os
+import re
 import json
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, fields
 from typing import Optional
 
 import xbmc
@@ -10,8 +11,6 @@ import xbmcgui
 from .utilities import clean_art_url, send_kodi_json
 # noinspection PyPackages
 from .logger import Logger
-# noinspection PyUnresolvedReferences
-from infotagger.listitem import ListItemInfoTag
 
 
 @dataclass
@@ -35,6 +34,10 @@ class Playback:
     fanart: Optional[str] = None
     poster: Optional[str] = None
     icon: Optional[str] = None
+    banner: Optional[str] = None
+    clearlogo: Optional[str] = None
+    clearart: Optional[str] = None
+    landscape: Optional[str] = None
     year: Optional[int] = None
     showtitle: Optional[str] = None
     season: Optional[int] = None
@@ -45,6 +48,43 @@ class Playback:
     channelname: Optional[str] = None
     channelnumberlabel: Optional[str] = None
     channelgroup: Optional[str] = None
+    # Extended metadata - best effort, gathered from VideoPlayer.* InfoLabels during playback
+    originaltitle: Optional[str] = None
+    plot: Optional[str] = None
+    plotoutline: Optional[str] = None
+    tagline: Optional[str] = None
+    genre: Optional[str] = None  # multi-value fields are stored as Kodi's own " / " joined display string
+    director: Optional[str] = None
+    writer: Optional[str] = None
+    studio: Optional[str] = None
+    country: Optional[str] = None
+    mpaa: Optional[str] = None
+    premiered: Optional[str] = None
+    imdbnumber: Optional[str] = None
+    trailer: Optional[str] = None
+    rating: Optional[float] = None
+    votes: Optional[str] = None  # kept as Kodi's own formatted string (e.g. "1,234") rather than parsed
+    top250: Optional[int] = None
+    playcount: Optional[int] = None
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Playback":
+        """
+        Construct a Playback from a stored (JSON) dict, tolerant of it having been written by an
+        older or newer version of this class - unknown keys (e.g. a field since removed/renamed)
+        are dropped rather than raising, and missing keys (e.g. a field added since the dict was
+        written) simply fall back to the dataclass defaults.
+
+        :param data: a dict of Playback field values, as previously produced by asdict()/toJson()
+        :return: a Playback instance
+        """
+        if not isinstance(data, dict):
+            raise TypeError(f"Playback.from_dict: expected a dict, got {type(data).__name__}")
+        known_fields = {f.name for f in fields(cls)}
+        unknown_keys = data.keys() - known_fields
+        if unknown_keys:
+            Logger.debug(f"Playback.from_dict: ignoring unknown stored keys: {sorted(unknown_keys)}")
+        return cls(**{key: value for key, value in data.items() if key in known_fields})
 
     @property
     def pluginlabel(self) -> str:
@@ -233,13 +273,17 @@ class Playback:
         else:
             self.type = "video"
 
-        # ARTWORK - POSTER, FANART THUMBNAIL and ICON
+        # ARTWORK - POSTER, FANART, THUMBNAIL, ICON, and a few extras
         self.poster = clean_art_url(xbmc.getInfoLabel('Player.Art(tvshow.poster)') or xbmc.getInfoLabel('Player.Art(poster)') or xbmc.getInfoLabel('Player.Art(thumb)'))
         self.fanart = clean_art_url(xbmc.getInfoLabel('Player.Art(fanart)'))
         thumbnail = xbmc.getInfoLabel('Player.Art(thumb)') or (item.getArt('thumb') or '')
         self.thumbnail = clean_art_url(thumbnail)
         icon = xbmc.getInfoLabel('Player.Art(icon)') or (item.getArt('icon') or '')
         self.icon = clean_art_url(icon)
+        self.banner = clean_art_url(xbmc.getInfoLabel('Player.Art(banner)'))
+        self.clearlogo = clean_art_url(xbmc.getInfoLabel('Player.Art(clearlogo)'))
+        self.clearart = clean_art_url(xbmc.getInfoLabel('Player.Art(clearart)'))
+        self.landscape = clean_art_url(xbmc.getInfoLabel('Player.Art(landscape)'))
 
         # OTHER DETAILS
         # PVR Live/Recordings
@@ -264,6 +308,41 @@ class Playback:
             self.episode = int(episode_label) if episode_label else None
         except ValueError:
             self.episode = None
+
+        # EXTENDED METADATA - best effort, for as rich a resumed/switched-back ListItem as possible
+        self.originaltitle = xbmc.getInfoLabel('VideoPlayer.OriginalTitle') or None
+        self.plot = xbmc.getInfoLabel('VideoPlayer.Plot') or None
+        self.plotoutline = xbmc.getInfoLabel('VideoPlayer.PlotOutline') or None
+        self.tagline = xbmc.getInfoLabel('VideoPlayer.TagLine') or None
+        self.genre = xbmc.getInfoLabel('VideoPlayer.Genre') or None
+        self.director = xbmc.getInfoLabel('VideoPlayer.Director') or None
+        self.writer = xbmc.getInfoLabel('VideoPlayer.Writer') or None
+        self.studio = xbmc.getInfoLabel('VideoPlayer.Studio') or None
+        self.country = xbmc.getInfoLabel('VideoPlayer.Country') or None
+        self.mpaa = xbmc.getInfoLabel('VideoPlayer.mpaa') or None
+        self.premiered = xbmc.getInfoLabel('VideoPlayer.Premiered') or None
+        self.imdbnumber = xbmc.getInfoLabel('VideoPlayer.IMDBNumber') or None
+        self.trailer = xbmc.getInfoLabel('VideoPlayer.Trailer') or None
+        self.votes = xbmc.getInfoLabel('VideoPlayer.Votes') or None
+
+        rating_label = xbmc.getInfoLabel('VideoPlayer.Rating')
+        try:
+            self.rating = float(rating_label) if rating_label else None
+        except ValueError:
+            self.rating = None
+
+        top250_label = xbmc.getInfoLabel('VideoPlayer.Top250')
+        try:
+            self.top250 = int(top250_label) if top250_label else None
+        except ValueError:
+            self.top250 = None
+
+        playcount_label = xbmc.getInfoLabel('VideoPlayer.PlayCount')
+        try:
+            self.playcount = int(playcount_label) if playcount_label else None
+        except ValueError:
+            self.playcount = None
+
         # Episodes -> we also want the number of seasons so callers can force-browse to the
         # appropriate spot after a resumed playback
         if self.tvshowdbid:
@@ -295,12 +374,150 @@ class Playback:
             if self.totalseasons is None and 'seasons' in properties:
                 self.totalseasons = len(properties['seasons'])
 
-    # noinspection PyMethodMayBeStatic
+    @staticmethod
+    def _split_multi(value: Optional[str]) -> list:
+        """
+        Split one of Kodi's own joined multi-value display strings (genre, director, writer,
+        studio, country - Kodi joins these with " / " by default, though a comma is also seen)
+        back into a list, for the setters that want one.
+
+        :param value: a Kodi-style joined string, e.g. "Action / Adventure"
+        :return: a list of the individual values, e.g. ["Action", "Adventure"]
+        """
+        if not value:
+            return []
+        return [v.strip() for v in re.split(r'\s*/\s*|\s*,\s*', value) if v.strip()]
+
+    def _apply_modern_video_tag(self, tag, duration_seconds: Optional[int]) -> None:
+        """
+        Populate a ListItem's InfoTagVideo using its modern, settable API (Kodi 20/Nexus+). Every
+        setter is called defensively (only if present, and only for values we actually have) so
+        that gaps in either the stored metadata or the Kodi version's API surface just mean less
+        gets set, rather than an error.
+
+        :param tag: the InfoTagVideo object, from ListItem.getVideoInfoTag()
+        :param duration_seconds: playback duration in seconds, if known
+        """
+        def set_if(method_name: str, *args) -> None:
+            method = getattr(tag, method_name, None)
+            if method:
+                method(*args)
+
+        if self.type:
+            set_if('setMediaType', self.type)
+        if self.dbid:
+            set_if('setDbId', self.dbid)
+        if self.title:
+            set_if('setTitle', self.title)
+        if self.originaltitle:
+            set_if('setOriginalTitle', self.originaltitle)
+        if self.plot:
+            set_if('setPlot', self.plot)
+        if self.plotoutline:
+            set_if('setPlotOutline', self.plotoutline)
+        if self.tagline:
+            set_if('setTagLine', self.tagline)
+        genres = self._split_multi(self.genre)
+        if genres:
+            set_if('setGenres', genres)
+        directors = self._split_multi(self.director)
+        if directors:
+            set_if('setDirectors', directors)
+        writers = self._split_multi(self.writer)
+        if writers:
+            set_if('setWriters', writers)
+        studios = self._split_multi(self.studio)
+        if studios:
+            set_if('setStudios', studios)
+        countries = self._split_multi(self.country)
+        if countries:
+            set_if('setCountries', countries)
+        if self.mpaa:
+            set_if('setMpaa', self.mpaa)
+        if self.premiered:
+            set_if('setPremiered', self.premiered)
+        if self.year:
+            set_if('setYear', self.year)
+        if self.imdbnumber:
+            set_if('setIMDBNumber', self.imdbnumber)
+        if self.top250:
+            set_if('setTop250', self.top250)
+        if self.trailer:
+            set_if('setTrailer', self.trailer)
+        if self.playcount is not None:
+            set_if('setPlaycount', self.playcount)
+        if self.rating is not None:
+            votes = 0
+            if self.votes:
+                try:
+                    votes = int(str(self.votes).replace(',', ''))
+                except ValueError:
+                    votes = 0
+            set_if('setRating', self.rating, votes)
+        if self.showtitle:
+            set_if('setTvShowTitle', self.showtitle)
+        if self.season is not None:
+            set_if('setSeason', self.season)
+        if self.episode is not None:
+            set_if('setEpisode', self.episode)
+        if duration_seconds is not None:
+            set_if('setDuration', int(duration_seconds))
+        if self.path:
+            set_if('setFilenameAndPath', self.path)
+        # Required, otherwise immediate resumed playback won't resume properly
+        set_if('setResumePoint', float(self.resumetime or 0.0), float(self.totaltime or 0.0))
+
+    def _apply_legacy_video_info(self, list_item: xbmcgui.ListItem, duration_seconds: Optional[int]) -> None:
+        """
+        Populate a ListItem's video info using the older, universally-supported setInfo()/
+        setProperty() APIs - the only option on Kodi versions (e.g. Matrix) that predate the
+        settable InfoTagVideo. Deprecated on newer Kodi (logs a warning), but still fully
+        functional, and this path is only used as a fallback when the modern API isn't available.
+
+        :param list_item: the ListItem to populate
+        :param duration_seconds: playback duration in seconds, if known
+        """
+        info = {
+                'mediatype':self.type,
+                'title':self.title,
+                'originaltitle':self.originaltitle,
+                'plot':self.plot,
+                'plotoutline':self.plotoutline,
+                'tagline':self.tagline,
+                'genre':self._split_multi(self.genre),
+                'director':self._split_multi(self.director),
+                'writer':self._split_multi(self.writer),
+                'studio':self._split_multi(self.studio),
+                'country':self._split_multi(self.country),
+                'mpaa':self.mpaa,
+                'premiered':self.premiered,
+                'year':self.year,
+                'imdbnumber':self.imdbnumber,
+                'top250':self.top250,
+                'trailer':self.trailer,
+                'playcount':self.playcount,
+                'dbid':self.dbid,
+                'path':self.path,
+                'tvshowtitle':self.showtitle,
+                'episode':self.episode,
+                'season':self.season,
+                'duration':duration_seconds,
+                'rating':self.rating,
+        }
+        info = {key:value for key, value in info.items() if value not in (None, '', [])}
+        list_item.setInfo('video', info)
+        # Required, otherwise immediate resumed playback won't resume properly
+        list_item.setProperty('ResumeTime', str(self.resumetime or 0))
+        list_item.setProperty('TotalTime', str(self.totaltime or 0))
+
     def create_list_item_from_playback(self) -> xbmcgui.ListItem:
         """
         Create a Kodi ListItem object from a Playback object, with as much metadata attached as
-        possible (title, artwork, episode/season, resume point) so Kodi's UI has something
-        meaningful to display, rather than e.g. a bare "stream" label.
+        possible (title, artwork, cast/crew/plot, episode/season, resume point etc) so Kodi's UI
+        has something meaningful to display, rather than e.g. a bare "stream" label. Uses the
+        modern, settable InfoTagVideo API (Kodi 20/Nexus+) when available, since that avoids the
+        deprecation warnings the older setInfo() API now logs - and falls back to setInfo()/
+        setProperty() on older Kodi (e.g. Matrix), where the modern API doesn't exist.
 
         :return: ListItem: a Kodi ListItem object constructed from the Playback object
         """
@@ -308,7 +525,8 @@ class Playback:
         Logger.debug("Creating list item from playback:", self)
 
         list_item = xbmcgui.ListItem(label=self.pluginlabel, path=self.file if self.source not in ["addon", "pvr_live"] else self.path)
-        art = {key:value for key, value in {"thumb":self.thumbnail, "poster":self.poster, "fanart":self.fanart, "icon":self.icon}.items() if value}
+        art = {key:value for key, value in {"thumb":self.thumbnail, "poster":self.poster, "fanart":self.fanart, "icon":self.icon,
+                                             "banner":self.banner, "clearlogo":self.clearlogo, "clearart":self.clearart, "landscape":self.landscape}.items() if value}
         if art:
             list_item.setArt(art)
         list_item.setProperty('IsPlayable', 'true')
@@ -318,32 +536,21 @@ class Playback:
         if self.source == "pvr_live":
             return list_item
 
-        # Otherwise, it's an episode/movie/file etc...set the InfoVideoTag stuff
-        tag = ListItemInfoTag(list_item, "video")
-        duration_seconds = None
-        if self.duration is not None:
-            duration_seconds = self.duration
-        elif self.totaltime is not None:
-            duration_seconds = self.totaltime
+        duration_seconds = self.duration if self.duration is not None else self.totaltime
 
-        # Infotagger seems the best way to do this currently as is well tested
-        # I found directly setting things on InfoVideoTag to be buggy/inconsistent
-        infolabels = {
-                'mediatype':self.type,
-                'dbid':self.dbid,
-                'title':self.title,
-                'path':self.path,
-                'year':self.year,
-                'tvshowtitle':self.showtitle,
-                'episode':self.episode,
-                'season':self.season,
-                'duration':duration_seconds,
-        }
-        tag.set_info(infolabels)
+        try:
+            tag = list_item.getVideoInfoTag()
+            if hasattr(tag, 'setResumePoint'):
+                self._apply_modern_video_tag(tag, duration_seconds)
+            else:
+                self._apply_legacy_video_info(list_item, duration_seconds)
+        except Exception as e:
+            Logger.error(f"create_list_item_from_playback: error setting video info via modern API, falling back to legacy: {e}")
+            try:
+                self._apply_legacy_video_info(list_item, duration_seconds)
+            except Exception as e2:
+                Logger.error(f"create_list_item_from_playback: legacy fallback also failed, list item will have minimal metadata: {e2}")
 
-        # Required, otherwise immediate resumed playback won't resume properly
-        # These keys are correct, even if CodeRabbit says they are not - see https://github.com/jurialmunkey/script.module.infotagger/blob/f138c1dd7201a8aff7541292fbfc61ed7b3a9aa1/resources/modules/infotagger/listitem.py#L204
-        tag.set_resume_point({'ResumeTime':float(self.resumetime or 0.0), 'TotalTime':float(self.totaltime or 0.0)})
         if self.tvshowdbid:
             list_item.setProperty('tvshowdbid', str(self.tvshowdbid))
 
