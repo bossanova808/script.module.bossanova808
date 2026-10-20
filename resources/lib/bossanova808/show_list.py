@@ -59,6 +59,11 @@ class ShowList:
         """
         self._shows = {}
         self._save_blocked = False
+        previous_path = self.path + '.old'
+        if not xbmcvfs.exists(self.path) and xbmcvfs.exists(previous_path):
+            # A save was interrupted while replacing the file (see save()) - put the last good list back
+            Logger.warning(f'Recovering show list {self.path} from {previous_path}')
+            xbmcvfs.rename(previous_path, self.path)
         if not xbmcvfs.exists(self.path):
             return
         try:
