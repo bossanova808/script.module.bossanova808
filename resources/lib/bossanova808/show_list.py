@@ -95,11 +95,16 @@ class ShowList:
             xbmcvfs.delete(temporary_path)
             return False
         if not xbmcvfs.rename(temporary_path, self.path):
-            # Some platforms won't rename over an existing file
-            xbmcvfs.delete(self.path)
-            if not xbmcvfs.rename(temporary_path, self.path):
-                Logger.error(f'Could not replace show list {self.path} - the new list is in {temporary_path}')
+            # Some platforms won't rename over an existing file, so move the old list aside (rather than
+            # deleting it) until the new one is definitely in place
+            previous_path = self.path + '.old'
+            xbmcvfs.delete(previous_path)
+            if not xbmcvfs.rename(self.path, previous_path) or not xbmcvfs.rename(temporary_path, self.path):
+                if not xbmcvfs.exists(self.path) and xbmcvfs.exists(previous_path):
+                    xbmcvfs.rename(previous_path, self.path)
+                Logger.error(f'Could not replace show list {self.path} - the saved list is unchanged')
                 return False
+            xbmcvfs.delete(previous_path)
         return True
 
     def contains(self, key):
